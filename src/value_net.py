@@ -14,7 +14,7 @@ class ValueNet(nn.Module):
     def forward(self, x):
         x = self.fc1(x)
         x = F.leaky_relu(x)
-        x = x.view(9, 9, 9)
+        x = x.view(1, 9, 9, 9)
         x = self.conv1(x)
         x = F.leaky_relu(x)
         x = self.conv2(x)
