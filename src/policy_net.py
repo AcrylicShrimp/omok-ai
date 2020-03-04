@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 class PolicyNet(nn.Module):
     def __init__(self):
-        super(ValueNet, self).__init__()
+        super(PolicyNet, self).__init__()
         self.conv1 = nn.Conv2d(9, 32, 5)   # >> 5x5
         self.conv2 = nn.Conv2d(32, 64, 3)  # >> 3x3
         self.conv3 = nn.Conv2d(64, 81, 3)  # >> 1x1
