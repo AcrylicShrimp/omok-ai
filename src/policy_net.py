@@ -6,20 +6,27 @@ import torch.nn.functional as F
 class PolicyNet(nn.Module):
     def __init__(self):
         super(PolicyNet, self).__init__()
-        self.fc1 = nn.Linear(730, 729)
-        self.conv1 = nn.Conv2d(9, 32, 5)   # >> 5x5
-        self.conv2 = nn.Conv2d(32, 64, 3)  # >> 3x3
-        self.conv3 = nn.Conv2d(64, 81, 3)  # >> 1x1
+        self.conv1 = nn.Conv2d(3, 32, 3)    # >> 7x7
+        self.bnorm1 = nn.BatchNorm2d(32)
+        self.conv2 = nn.Conv2d(32, 64, 3)   # >> 5x5
+        self.bnorm2 = nn.BatchNorm2d(64)
+        self.conv3 = nn.Conv2d(64, 128, 3)  # >> 3x3
+        self.bnorm3 = nn.BatchNorm2d(128)
+        self.conv4 = nn.Conv2d(128, 81, 3)  # >> 1x1
 
     def forward(self, x):
-        x = self.fc1(x)
-        x = F.leaky_relu(x)
-        x = x.view(1, 9, 9, 9)
+        x = x.view(1, 3, 9, 9)
         x = self.conv1(x)
+        x = self.bnorm1(x)
         x = F.leaky_relu(x)
         x = self.conv2(x)
+        x = self.bnorm2(x)
         x = F.leaky_relu(x)
         x = self.conv3(x)
-        x = F.softmax(x, 1)
-        output = x.view(9, 9)
+        x = self.bnorm3(x)
+        x = F.leaky_relu(x)
+        x = self.conv4(x)
+        x = x.flatten()
+        x = F.softmax(x, -1)
+        output = x
         return output
