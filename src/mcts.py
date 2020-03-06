@@ -1,6 +1,9 @@
 
+
 import math
 import random
+
+import torch
 
 from game import Game
 
@@ -103,8 +106,10 @@ class MCTS:
             if action not in self.root.childs:
                 raise RuntimeError('given action is not legal')
 
-        self.histories.append(
-            (self.root.state, [(child.action, child.visited / self.root.visited) for action, child in self.root.childs.items()]))
+        probs = torch.softmax(torch.Tensor([self.root.childs[action].visited /
+                                            self.root.visited if action in self.root.childs else 0 for action in Game.all_actions()]))
+
+        self.histories.append((self.root.state, probs))
 
         self.root = self.root.childs[action]
         self.root.parent = None

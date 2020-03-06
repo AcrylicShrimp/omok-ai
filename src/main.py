@@ -1,4 +1,5 @@
 
+import cProfile
 import torch
 
 from actor_critic import ActorCritic
@@ -14,7 +15,7 @@ def step():
     ai.new_game()
 
     while True:
-        for _ in range(10):
+        for _ in range(100):
             ai.step(state.turn)
 
         action = ai.select_action()
@@ -33,7 +34,7 @@ def step():
 count = 0
 
 while True:
-    step()
+    cProfile.run('step()')
     count += 1
 
     if count == 50:

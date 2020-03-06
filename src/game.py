@@ -10,6 +10,10 @@ class Game:
         return State(BLACK, torch.cat([torch.zeros(2, 81), torch.ones(1, 81)]))
 
     @staticmethod
+    def all_actions():
+        return [action for action in range(81)]
+
+    @staticmethod
     def possible_actions(state):
         return [action for action in range(81) if state.state[2][action] > .5]
 

@@ -4,7 +4,6 @@ from os import path
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.distributions import Categorical
 
 from mcts import MCTS
 from policy_net import PolicyNet
@@ -32,24 +31,29 @@ class ActorCritic:
         self.mcts.place(self.policy_net, action)
 
     def train(self, end_state):
-        losses = []
+        policy_losses = []
+        value_losses = []
 
         def get_reward(state):
             return end_state.reward if state.turn == end_state.turn else -end_state.reward
 
         for history in self.mcts.histories:
-            losses.append(F.smooth_l1_loss(
+            value_losses.append(F.mse_loss(
                 self.value_net.forward(history[0].state), torch.Tensor([get_reward(history[0])])).unsqueeze(0))
 
-            predict = Categorical(self.policy_net.forward(history[0].state))
+            print(self.policy_net.forward(history[0].state).size())
+            print(history[1].size())
 
-            for action, prob in history[1]:
-                losses.append(-predict.log_prob(torch.Tensor([action])) * prob)
+            policy_losses.append(F.cross_entropy(
+                self.policy_net.forward(history[0].state), history[1]))
+
+        loss = torch.sum(torch.stack(policy_losses) +
+                         torch.stack(value_losses))
 
         self.policy_optim.zero_grad()
         self.value_optim.zero_grad()
 
-        torch.stack(losses).sum().backward()
+        loss.backward()
 
         self.policy_optim.step()
         self.value_optim.step()
