@@ -1,21 +1,23 @@
 
 import torch
 
-from state import BLACK, WHITE, State
+from state import BLACK, WHITE, BOARD_SIZE, State
+
+END_SIZE = 3
 
 
 class Game:
     @staticmethod
     def init():
-        return State(BLACK, torch.cat([torch.zeros(2, 81), torch.ones(1, 81)]))
+        return State(BLACK, torch.cat([torch.zeros(2, BOARD_SIZE ** 2), torch.ones(1, BOARD_SIZE ** 2)]))
 
     @staticmethod
     def all_actions():
-        return [action for action in range(81)]
+        return list(range(BOARD_SIZE ** 2))
 
     @staticmethod
     def possible_actions(state):
-        return [action for action in range(81) if state.state[2][action] > .5]
+        return [action for action in range(BOARD_SIZE ** 2) if state.is_legal(action)]
 
     @staticmethod
     def next_state(state, action):
@@ -37,23 +39,23 @@ class Game:
         bottomleft = trace_dot(lambda x, y: (x - 1, y + 1))
         bottomright = trace_dot(lambda x, y: (x + 1, y + 1))
 
-        if left + right == 6:
+        if left + right == END_SIZE + 1:
             new_state.reward = -1
             return new_state
 
-        if top + bottom == 6:
+        if top + bottom == END_SIZE + 1:
             new_state.reward = -1
             return new_state
 
-        if topleft + bottomright == 6:
+        if topleft + bottomright == END_SIZE + 1:
             new_state.reward = -1
             return new_state
 
-        if topright + bottomleft == 6:
+        if topright + bottomleft == END_SIZE + 1:
             new_state.reward = -1
             return new_state
 
-        for action in range(81):
+        for action in range(BOARD_SIZE ** 2):
             if new_state.state[2][action] > .5:
                 return new_state
 

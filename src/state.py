@@ -2,6 +2,8 @@
 BLACK = -1
 WHITE = 1
 
+BOARD_SIZE = 3
+
 
 class State:
     def __init__(self, turn, state):
@@ -12,11 +14,12 @@ class State:
     def __str__(self):
         results = []
 
-        for y in range(9):
-            for x in range(9):
-                me = self.state[self.get_turn_index(self.turn)][x + y * 9]
+        for y in range(BOARD_SIZE):
+            for x in range(BOARD_SIZE):
+                me = self.state[self.get_turn_index(
+                    self.turn)][x + y * BOARD_SIZE]
                 opposite = self.state[self.get_turn_index(
-                    -self.turn)][x + y * 9]
+                    -self.turn)][x + y * BOARD_SIZE]
 
                 if me > .5:
                     results.append('<>')
@@ -57,20 +60,14 @@ class State:
                 break
 
             count += 1
-            x, y = cb(index % 9, index // 9)
+            x, y = cb(index % BOARD_SIZE, index // BOARD_SIZE)
 
-            if x is None:
+            if x < 0 or x >= BOARD_SIZE:
                 break
 
-            if y is None:
+            if y < 0 or y >= BOARD_SIZE:
                 break
 
-            if x < 0 or x >= 9:
-                break
-
-            if y < 0 or y >= 9:
-                break
-
-            index = x + y * 9
+            index = x + y * BOARD_SIZE
 
         return count
