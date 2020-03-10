@@ -7,7 +7,7 @@ from state import BLACK, WHITE, BOARD_SIZE
 
 ai = ActorCritic()
 
-ai.load('second')
+ai.load('third')
 print('ai loaded!')
 
 state = Game.init()
@@ -44,7 +44,7 @@ while True:
     else:
         print('ai is thinking...')
 
-        for _ in range(10):
+        for _ in range(50):
             ai.step()
 
         action = ai.select_action()
@@ -53,7 +53,9 @@ while True:
     ai.place(action)
 
     if state.is_terminated:
-        if state.turn == WHITE:
+        if abs(state.reward) < .5:
+            print('draw!')
+        elif state.turn == WHITE:
             print('you lose!')
         else:
             print('you win!')

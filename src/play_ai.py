@@ -1,4 +1,6 @@
 
+import random
+
 import torch
 
 from actor_critic import ActorCritic
@@ -7,46 +9,45 @@ from game import Game
 from state import BLACK, WHITE, BOARD_SIZE
 
 ai = ActorCritic()
-mcts = MCTS()
-
-ai.load('second')
-print('ai loaded!')
-
-state = Game.init()
-ai.new_game()
-
-turn = 0
+ai.load('third')
 
 while True:
-    turn += 1
+    mcts = MCTS()
+    ai.new_game()
 
-    print('turn #{}:'.format(turn))
-    print(state)
+    state = Game.init()
 
-    if state.turn == WHITE:  # MCTS's turn!
-        for _ in range(100):
-            mcts.step()
+    turn = 0
 
-        action = mcts.select_most()
+    ai_side = random.choice([BLACK, WHITE])
 
-    else:
-        for _ in range(100):
-            ai.step()
+    while True:
+        turn += 1
 
-        action = ai.select_action()
+        if state.turn == ai_side:
+            for _ in range(50):
+                ai.step()
 
-    state = Game.next_state(state, action)
-    mcts.place(action)
-    ai.place(action)
-
-    if state.is_terminated:
-        if abs(state.reward) < .5:
-            print('draw!')
-        elif state.turn == WHITE:
-            print('MCTS win!')
+            action = ai.select_action()
         else:
-            print('AC win!')
+            for _ in range(50):
+                mcts.step()
 
-        print(state)
+            action = mcts.select_best()
 
-        break
+        state = Game.next_state(state, action)
+        ai.place(action)
+        mcts.place(action)
+
+        if state.is_terminated:
+            if abs(state.reward) < .5:
+                print('draw!')
+            elif state.turn == ai_side:
+                print('MCTS win!')
+            else:
+                print('ai win!')
+
+            print(state)
+            print()
+
+            break

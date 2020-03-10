@@ -23,6 +23,9 @@ class Game:
     def next_state(state, action):
         new_state = State(-state.turn,
                           torch.cat([state.state[1].unsqueeze(0), state.state[0].unsqueeze(0), state.state[2].unsqueeze(0)]))
+
+        assert state.turn != new_state.turn
+
         # IMPORTANT!
         # We're using state.turn instead of new_state.turn.
         new_state.place_dot(state.turn, action)

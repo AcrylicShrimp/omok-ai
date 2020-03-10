@@ -41,10 +41,10 @@ while True:
     else:
         print('ai is thinking...')
 
-        for _ in range(100):
+        for _ in range(1000):
             mcts.step()
 
-        action = mcts.select_most()
+        action = mcts.select_best()
 
     state = Game.next_state(state, action)
     mcts.place(action)

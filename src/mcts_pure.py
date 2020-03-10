@@ -28,27 +28,31 @@ class MCTSNode:
     def calc_ucb(self, c_puct):
         """
         Calculates the UCB value of self.
-        UCB = q + U
-        U = c_puct * sqrt(N) / (1 + n)
+        NOTE: We're reversing q value here,
+        because the highest q value child leads thier parent node to take bad action.
+        UCB = -q + U
+        U = c_puct * sqrt(N / (1 + n))
         """
-        return self.q + c_puct * (math.sqrt(self.parent.n) if self.parent is not None else 0) / (1 + self.n)
+        return -self.q + c_puct * math.sqrt((self.parent.n if self.parent is not None else 0) / (1 + self.n))
 
-    def select_most(self):
+    def select_best(self):
         """
-        Returns a child node that has highest q value.
+        Returns a child node that has lowest q value.
+        NOTE: We're searching for the lowest q value here,
+        because the highest q value child leads thier parent node to take bad action.
         """
         if self.is_leaf:
             return None
 
         # Gets childs.
         childs = [(child.q, child)
-                  for action, child in self.childs.items()]
+                  for child in self.childs.values()]
 
         # Shuffle them - to randomly select a child when there're many childs that have same visit count.
         random.shuffle(childs)
 
         # Sort them and returns first child.
-        return sorted(childs, key=lambda x: x[0], reverse=True)[0][1]
+        return sorted(childs, key=lambda x: x[0])[0][1]
 
     def select_leaf(self):
         """
@@ -59,7 +63,7 @@ class MCTSNode:
 
         # Gets childs.
         childs = [(child.calc_ucb(1.), child)
-                  for action, child in self.childs.items()]
+                  for child in self.childs.values()]
 
         # Shuffle them - to randomly select a child when there're many childs that have same UCB value.
         random.shuffle(childs)
@@ -103,10 +107,11 @@ class MCTSNode:
         node = self
 
         while node is not None:
+            reward = state.reward * \
+                (1 if state.turn == node.state.turn else -1)
+
             node.n += 1
-            # WTF? Why the reward should be negative here?
-            node.w += -state.reward * (1 if state.turn ==
-                                       node.state.turn else -1)
+            node.w += reward
             node.q = node.w / node.n
             node = node.parent
 
@@ -128,11 +133,11 @@ class MCTS:
         leaf = leaf.select_leaf()
         leaf.backup()
 
-    def select_most(self):
+    def select_best(self):
         """
-        Selects an available action that has the highest Q value.
+        Selects an available action that has the lowest Q value.
         """
-        return self.root.select_most().action
+        return self.root.select_best().action
 
     def place(self, action):
         """

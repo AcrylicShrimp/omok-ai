@@ -4,9 +4,7 @@ import random
 import torch
 
 from actor_critic import ActorCritic
-from mcts_pure import MCTS
 from game import Game
-from state import BLACK, WHITE
 
 
 ai = ActorCritic()
@@ -14,39 +12,27 @@ ai = ActorCritic()
 
 
 def step():
-    mcts = MCTS()
-
     histories = []
     state = Game.init()
     ai.new_game()
 
-    ai_side = random.choice([BLACK, WHITE])
-
     while True:
-        if state.turn == ai_side:
-            for _ in range(100):
-                ai.step()
-            for _ in range(100):
-                mcts.step()
+        for _ in range(100):
+            ai.step()
 
-            action = ai.select_action()
-        else:
-            for _ in range(100):
-                ai.step()
-            for _ in range(100):
-                mcts.step()
-
-            action = mcts.select_most()
+        action = ai.select_action()
 
         state = Game.next_state(state, action)
-        histories.append(ai.place(action))
-        mcts.place(action)
+        histories.append(ai.place(action, True))
 
         if state.is_terminated:
             print()
             print(state)
-            print('reward:', state.reward
-                  if state.turn == ai_side else -state.reward)
+
+            if abs(state.reward) < .5:
+                print('draw!')
+            else:
+                print('not draw!')
 
             ai.train(state, histories)
 
@@ -56,12 +42,11 @@ def step():
 count = 0
 
 while True:
-    # cProfile.run('step()', sort='tottime')
     step()
 
     count += 1
 
     if count == 10:
         count = 0
-        ai.save('second')
-        print('saved!')
+        ai.save('third')
+        print('========== saved! ==========')

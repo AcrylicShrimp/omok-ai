@@ -25,12 +25,13 @@ import torch.nn.functional as F
 #         output = x
 #         return output
 
-class PolicyNet(nn.Module):
+class Network(nn.Module):
     def __init__(self):
-        super(PolicyNet, self).__init__()
-        self.fc1 = nn.Linear(27, 64)
-        self.fc2 = nn.Linear(64, 32)
-        self.fc3 = nn.Linear(32, 9)
+        super(Network, self).__init__()
+        self.fc1 = nn.Linear(27, 36)
+        self.fc2 = nn.Linear(36, 36)
+        self.policy_head = nn.Linear(36, 9)
+        self.value_head = nn.Linear(36, 1)
 
     def forward(self, x):
         x = x.view(1, 27)
@@ -38,8 +39,13 @@ class PolicyNet(nn.Module):
         x = F.leaky_relu(x)
         x = self.fc2(x)
         x = F.leaky_relu(x)
-        x = self.fc3(x)
-        x = x.flatten()
-        x = F.softmax(x, 0)
-        output = x
-        return output
+        policy = self.policy_head(x)
+        value = self.value_head(x)
+
+        policy = policy.flatten()
+        value = value.flatten()
+
+        policy = F.softmax(policy, 0)
+        value = torch.tanh(value)
+
+        return policy, value
