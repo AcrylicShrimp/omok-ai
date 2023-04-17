@@ -1,3 +1,7 @@
+mod model;
+
+use model::create_model;
+
 fn main() {
-    println!("Hello, world!");
+    let model = create_model().unwrap();
 }
