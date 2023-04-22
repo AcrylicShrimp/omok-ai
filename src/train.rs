@@ -7,8 +7,7 @@ use std::collections::VecDeque;
 use tensorflow::{
     ops::{assign, constant, reshape, square, sub, GatherNd, Placeholder},
     train::{AdadeltaOptimizer, MinimizeOptions, Optimizer},
-    DataType, Operation, SavedModelBundle, Session, SessionOptions, SessionRunArgs, Status, Tensor,
-    Variable,
+    DataType, Operation, Session, SessionOptions, SessionRunArgs, Status, Tensor, Variable,
 };
 
 pub struct Transition {
