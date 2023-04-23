@@ -338,16 +338,17 @@ impl TrainSession {
                             tensor[..].copy_from_slice(next_state);
 
                             let mut eval_run_args = SessionRunArgs::new();
-                            eval_run_args.add_feed(&self.op_input, 0, &tensor);
-                            eval_run_args.add_target(&self.op_output);
+                            eval_run_args.add_feed(&self.op_target_input, 0, &tensor);
+                            eval_run_args.add_target(&self.op_target_output);
 
-                            let fetch_token = eval_run_args.request_fetch(&self.op_output, 0);
+                            let fetch_token =
+                                eval_run_args.request_fetch(&self.op_target_output, 0);
                             self.session.run(&mut eval_run_args)?;
 
-                            let output = eval_run_args.fetch::<f32>(fetch_token)?;
-                            let future_q = *output[..]
+                            let target_output = eval_run_args.fetch::<f32>(fetch_token)?;
+                            let future_q = *target_output[..]
                                 .iter()
-                                .max_by(|q_lhs, q_rhs| f32::total_cmp(q_lhs, q_rhs))
+                                .max_by(|&q_lhs, &q_rhs| f32::total_cmp(q_lhs, q_rhs))
                                 .unwrap();
                             transition.reward + 0.95 * future_q
                         }
