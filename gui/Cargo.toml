@@ -1,15 +1,11 @@
 [package]
-name = "omok-ai"
+name = "gui"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rand = { version = "0.8" }
-tensorflow = { version = "0.20" }
-
-[workspace]
-members = [
-    "gui"
-]
+eframe = "0.21.3"
+egui = "0.21"
+tensorflow = "0.20"
