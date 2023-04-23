@@ -3,7 +3,7 @@ use crate::{
     model::Model,
 };
 use rand::{distributions::Uniform, thread_rng, Rng};
-use std::collections::VecDeque;
+use std::{collections::VecDeque, fmt::Display};
 use tensorflow::{
     ops::{assign, constant, reshape, square, sub, GatherNd, Placeholder},
     train::{AdadeltaOptimizer, MinimizeOptions, Optimizer},
@@ -15,6 +15,32 @@ pub struct Transition {
     pub next_state: Option<[f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE]>,
     pub action: usize,
     pub reward: f32,
+}
+
+impl Display for Transition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for row in 0..Environment::BOARD_SIZE {
+            for col in 0..Environment::BOARD_SIZE {
+                let index = row * Environment::BOARD_SIZE + col;
+                let stone = self.state[index];
+                write!(
+                    f,
+                    "{}",
+                    if index == self.action {
+                        "A"
+                    } else if f32::abs(stone) < f32::EPSILON {
+                        "-"
+                    } else if 0f32 < stone {
+                        "O"
+                    } else {
+                        "X"
+                    }
+                )?;
+            }
+            writeln!(f)?;
+        }
+        Ok(())
+    }
 }
 
 pub struct TrainSession {
