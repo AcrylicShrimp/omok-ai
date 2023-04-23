@@ -110,7 +110,8 @@ impl TrainSession {
             &mut model.scope,
         )?;
 
-        let optimizer = AdadeltaOptimizer::new();
+        let mut optimizer = AdadeltaOptimizer::new();
+        optimizer.set_learning_rate(constant(0.01f32, &mut model.scope)?);
         let (optimizer_vars, op_minimize) = optimizer.minimize(
             &mut model.scope,
             op_loss.output(0),
