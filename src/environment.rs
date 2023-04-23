@@ -35,7 +35,7 @@ impl Environment {
     pub fn copy_board(&self, turn: Turn, slice: &mut [f32; Self::BOARD_SIZE * Self::BOARD_SIZE]) {
         slice.copy_from_slice(&self.board[..]);
 
-        if turn != self.turn {
+        if turn == Turn::White {
             // Make the board from the perspective of opponent
             for i in 0..slice.len() {
                 slice[i] = -slice[i];
