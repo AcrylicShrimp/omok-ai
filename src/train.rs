@@ -144,7 +144,7 @@ impl TrainSession {
             op_input_target_q,
             op_input_action,
             op_loss,
-            replay_memory: VecDeque::with_capacity(100_0000),
+            replay_memory: VecDeque::with_capacity(1_0000),
             played_turn_count: 0,
         })
     }
@@ -225,7 +225,7 @@ impl TrainSession {
                     reward,
                 });
 
-                if self.replay_memory.len() == 50_000 {
+                if self.replay_memory.len() == 5000 {
                     println!(
                         "Draw: {}, Black Win: {}, White Win: {}",
                         draw, black_win, white_win
@@ -270,8 +270,7 @@ impl TrainSession {
                 let mut board = [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
                 env.copy_board(turn, &mut board);
 
-                let epsilon =
-                    f64::max(0.1f64, 1f64 - (self.played_turn_count as f64 / 100_0000f64));
+                let epsilon = f64::max(0.1f64, 1f64 - (self.played_turn_count as f64 / 1_0000f64));
                 let selected_move = if rng.gen_bool(epsilon) {
                     let legal_moves = env
                         .legal_moves
@@ -321,7 +320,7 @@ impl TrainSession {
 
                 let has_next_board = next_board.is_some();
 
-                if self.replay_memory.len() == 100_0000 {
+                if self.replay_memory.len() == 1_0000 {
                     self.replay_memory.pop_front();
                 }
 
@@ -342,7 +341,7 @@ impl TrainSession {
                     opponent_board[selected_move] = 0f32;
                     opponent_board[last_move] = 0f32;
 
-                    if self.replay_memory.len() == 100_0000 {
+                    if self.replay_memory.len() == 1_0000 {
                         self.replay_memory.pop_front();
                     }
 
