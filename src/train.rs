@@ -350,7 +350,7 @@ impl TrainSession {
                                 .iter()
                                 .max_by(|&q_lhs, &q_rhs| f32::total_cmp(q_lhs, q_rhs))
                                 .unwrap();
-                            transition.reward + 0.95 * future_q
+                            transition.reward + 0.5 * future_q
                         }
                         None => transition.reward,
                     };
