@@ -5,7 +5,7 @@ use crate::{
 use rand::{distributions::Uniform, thread_rng, Rng};
 use std::{collections::VecDeque, fmt::Display};
 use tensorflow::{
-    ops::{assign, constant, reshape, square, sub, GatherNd, Placeholder},
+    ops::{assign, constant, mean, reshape, square, sub, GatherNd, Placeholder},
     train::{AdadeltaOptimizer, MinimizeOptions, Optimizer},
     DataType, Operation, Session, SessionOptions, SessionRunArgs, Status, Tensor, Variable,
 };
@@ -101,8 +101,12 @@ impl TrainSession {
             .Tindices(DataType::Int32)
             .build(flatten_output, op_input_action.clone(), &mut model.scope)?;
 
-        let op_loss = square(
+        let op_loss = mean(
+            square(
             sub(op_input_target_q.clone(), q, &mut model.scope)?,
+            &mut model.scope,
+            )?,
+            constant(&[0], &mut model.scope)?,
             &mut model.scope,
         )?;
 
