@@ -68,17 +68,20 @@ impl Environment {
         };
 
         let horizontal_count = 1
-            + self.count_serial_stones(turn, index, &[(-1, 0), (-2, 0), (-3, 0), (-4, 0)])
-            + self.count_serial_stones(turn, index, &[(1, 0), (2, 0), (3, 0), (4, 0)]);
+            + self.count_serial_stones(turn, index, &[(-1, 0), (-2, 0), (-3, 0), (-4, 0), (-5, 0)])
+            + self.count_serial_stones(turn, index, &[(1, 0), (2, 0), (3, 0), (4, 0), (5, 0)]);
         let vertical_count = 1
-            + self.count_serial_stones(turn, index, &[(0, -1), (0, -2), (0, -3), (0, -4)])
-            + self.count_serial_stones(turn, index, &[(0, 1), (0, 2), (0, 3), (0, 4)]);
-        let diagonal_lt_rb_count = 1
-            + self.count_serial_stones(turn, index, &[(-1, -1), (-2, -2), (-3, -3), (-4, -4)])
-            + self.count_serial_stones(turn, index, &[(1, 1), (2, 2), (3, 3), (4, 4)]);
+            + self.count_serial_stones(turn, index, &[(0, -1), (0, -2), (0, -3), (0, -4), (0, -5)])
+            + self.count_serial_stones(turn, index, &[(0, 1), (0, 2), (0, 3), (0, 4), (0, 5)]);
+        let diagonal_lt_rb_count =
+            1 + self.count_serial_stones(
+                turn,
+                index,
+                &[(-1, -1), (-2, -2), (-3, -3), (-4, -4), (-5, -5)],
+            ) + self.count_serial_stones(turn, index, &[(1, 1), (2, 2), (3, 3), (4, 4), (5, 5)]);
         let diagonal_lb_rt_count = 1
-            + self.count_serial_stones(turn, index, &[(-1, 1), (-2, 2), (-3, 3), (-4, 4)])
-            + self.count_serial_stones(turn, index, &[(1, -1), (2, -2), (3, -3), (4, -4)]);
+            + self.count_serial_stones(turn, index, &[(-1, 1), (-2, 2), (-3, 3), (-4, 4), (-5, 5)])
+            + self.count_serial_stones(turn, index, &[(1, -1), (2, -2), (3, -3), (4, -4), (5, -5)]);
 
         if horizontal_count == Self::SERIAL_STONE_COUNT
             || vertical_count == Self::SERIAL_STONE_COUNT
