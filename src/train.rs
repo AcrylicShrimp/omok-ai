@@ -3,11 +3,17 @@ use crate::{
     model::Model,
 };
 use rand::{distributions::Uniform, thread_rng, Rng};
-use std::{collections::VecDeque, fmt::Display};
+use std::{
+    collections::VecDeque,
+    fmt::Display,
+    fs::{create_dir_all, remove_dir_all},
+    path::Path,
+};
 use tensorflow::{
     ops::{assign, constant, mean, reshape, square, sub, GatherNd, Placeholder},
     train::{AdadeltaOptimizer, MinimizeOptions, Optimizer},
-    DataType, Operation, Session, SessionOptions, SessionRunArgs, Status, Tensor, Variable,
+    DataType, Operation, SavedModelBuilder, SavedModelSaver, Session, SessionOptions,
+    SessionRunArgs, Status, Tensor, Variable,
 };
 
 pub struct Transition {
@@ -46,6 +52,7 @@ impl Display for Transition {
 pub struct TrainSession {
     pub model: Model,
     pub session: Session,
+    pub saver: SavedModelSaver,
     pub optimizer: AdadeltaOptimizer,
     pub optimizer_vars: Vec<Variable>,
     pub op_minimize: Operation,
@@ -69,7 +76,9 @@ impl TrainSession {
             copy_ops.push(assign(
                 model.target_variables[index].output().clone(),
                 model.variables[index].output().clone(),
-                &mut model.scope,
+                &mut model
+                    .scope
+                    .with_op_name(&format!("copy_variable_{}", index)),
             )?);
         }
 
@@ -118,6 +127,19 @@ impl TrainSession {
             MinimizeOptions::default().with_variables(&model.variables),
         )?;
 
+        let mut variables = vec![];
+        variables.extend_from_slice(&model.variables);
+        variables.extend_from_slice(&model.target_variables);
+        variables.extend_from_slice(&optimizer_vars);
+
+        let mut builder = SavedModelBuilder::new();
+        builder
+            .add_collection("train", &variables)
+            .add_tag("serve")
+            .add_tag("train");
+
+        let saver = builder.inject(&mut model.scope)?;
+
         let session = Session::new(&SessionOptions::new(), &model.scope.graph())?;
         let op_input = model.scope.graph().operation_by_name_required("input")?;
         let op_output = model.scope.graph().operation_by_name_required("output")?;
@@ -133,6 +155,7 @@ impl TrainSession {
         Ok(Self {
             model,
             session,
+            saver,
             optimizer,
             optimizer_vars,
             op_minimize,
@@ -479,6 +502,9 @@ impl TrainSession {
                         "[Playing against random move player] Win: {}, Lose: {}, Draw: {}",
                         win, lose, draw
                     );
+
+                    self.save("model");
+                    println!("Model saved.");
                 }
 
                 if !has_next_board {
@@ -555,5 +581,23 @@ impl TrainSession {
                 }
             }
         }
+    }
+
+    fn save(&self, name: impl AsRef<Path>) {
+        let path = Path::new("saves").join(name);
+
+        if path.exists() {
+            remove_dir_all(&path).unwrap();
+        } else {
+            let base = path.parent().unwrap();
+
+            if !base.exists() {
+                create_dir_all(&base).unwrap();
+            }
+        }
+
+        self.saver
+            .save(&self.session, &self.model.scope.graph(), &path)
+            .unwrap();
     }
 }
