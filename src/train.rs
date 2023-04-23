@@ -179,9 +179,10 @@ impl TrainSession {
 
         loop {
             let mut env = Environment::new();
-            let mut turn = env.turn;
+            let mut last_move = 0;
 
             loop {
+                let turn = env.turn;
                 let mut board = [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
                 env.copy_board(turn, &mut board);
 
@@ -222,7 +223,6 @@ impl TrainSession {
                     action: random_move,
                     reward,
                 });
-                turn = env.turn;
 
                 if self.replay_memory.len() == 50_000 {
                     println!(
@@ -233,8 +233,25 @@ impl TrainSession {
                 }
 
                 if !has_next_board {
+                    let mut opponent_board =
+                        [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
+                    env.copy_board(turn.opponent(), &mut opponent_board);
+
+                    assert!(random_move != last_move);
+                    opponent_board[random_move] = 0f32;
+                    opponent_board[last_move] = 0f32;
+
+                    self.replay_memory.push_back(Transition {
+                        state: opponent_board,
+                        next_state: None,
+                        action: last_move,
+                        reward: -reward,
+                    });
+
                     break;
                 }
+
+                last_move = random_move;
             }
         }
     }
@@ -244,9 +261,10 @@ impl TrainSession {
 
         for _ in 0..count {
             let mut env = Environment::new();
-            let mut turn = env.turn;
+            let mut last_move = 0;
 
             loop {
+                let turn = env.turn;
                 let mut board = [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
                 env.copy_board(turn, &mut board);
 
@@ -311,7 +329,31 @@ impl TrainSession {
                     action: selected_move,
                     reward,
                 });
-                turn = env.turn;
+
+                if !has_next_board {
+                    // Restore the board to the state before the last two move.
+                    let mut opponent_board =
+                        [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
+                    env.copy_board(turn.opponent(), &mut opponent_board);
+
+                    assert!(selected_move != last_move);
+                    opponent_board[selected_move] = 0f32;
+                    opponent_board[last_move] = 0f32;
+
+                    if self.replay_memory.len() == 100_0000 {
+                        self.replay_memory.pop_front();
+                    }
+
+                    self.replay_memory.push_back(Transition {
+                        state: opponent_board,
+                        next_state: None,
+                        action: last_move,
+                        reward: -reward,
+                    });
+                }
+
+                last_move = selected_move;
+                self.played_turn_count += 1;
 
                 let mut tensor_input = Tensor::<f32>::new(&[
                     32,
@@ -368,7 +410,6 @@ impl TrainSession {
                 train_run_args.add_feed(&self.op_input_action, 0, &tensor_action);
                 train_run_args.add_target(&self.op_minimize);
                 self.session.run(&mut train_run_args)?;
-                self.played_turn_count += 1;
 
                 if self.played_turn_count % 1_0000 == 0 {
                     println!(

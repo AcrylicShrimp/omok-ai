@@ -4,6 +4,15 @@ pub enum Turn {
     White,
 }
 
+impl Turn {
+    pub fn opponent(self) -> Self {
+        match self {
+            Turn::Black => Turn::White,
+            Turn::White => Turn::Black,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GameStatus {
     InProgress,
