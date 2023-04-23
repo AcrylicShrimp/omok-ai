@@ -372,6 +372,7 @@ impl TrainSession {
                     let transition = &self.replay_memory[sampler.next().unwrap()];
                     let target_q = match &transition.next_state {
                         Some(next_state) => {
+                            // Double DQN
                             let mut tensor = Tensor::new(&[
                                 1,
                                 Environment::BOARD_SIZE as u64,
@@ -379,6 +380,23 @@ impl TrainSession {
                                 1,
                             ]);
                             tensor[..].copy_from_slice(next_state);
+
+                            let mut online_eval_run_args = SessionRunArgs::new();
+                            online_eval_run_args.add_feed(&self.op_input, 0, &tensor);
+                            online_eval_run_args.add_target(&self.op_output);
+
+                            let fetch_token =
+                                online_eval_run_args.request_fetch(&self.op_output, 0);
+                            self.session.run(&mut online_eval_run_args)?;
+
+                            let output = online_eval_run_args.fetch::<f32>(fetch_token)?;
+                            let action = output[..]
+                                .iter()
+                                .enumerate()
+                                .filter(|(index, _)| f32::abs(next_state[*index]) < f32::EPSILON)
+                                .max_by(|(_, q_lhs), (_, q_rhs)| f32::total_cmp(q_lhs, q_rhs))
+                                .unwrap()
+                                .0;
 
                             let mut eval_run_args = SessionRunArgs::new();
                             eval_run_args.add_feed(&self.op_target_input, 0, &tensor);
@@ -389,10 +407,7 @@ impl TrainSession {
                             self.session.run(&mut eval_run_args)?;
 
                             let target_output = eval_run_args.fetch::<f32>(fetch_token)?;
-                            let future_q = *target_output[..]
-                                .iter()
-                                .max_by(|&q_lhs, &q_rhs| f32::total_cmp(q_lhs, q_rhs))
-                                .unwrap();
+                            let future_q = target_output[action];
                             transition.reward + 0.5 * future_q
                         }
                         None => transition.reward,
