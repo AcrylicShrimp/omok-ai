@@ -259,6 +259,7 @@ impl TrainSession {
 
     pub fn perform_episodes(&mut self, count: usize) -> Result<(), Status> {
         let mut rng = thread_rng();
+        let mut recent_losses = VecDeque::with_capacity(100);
 
         for _ in 0..count {
             let mut env = Environment::new();
@@ -427,6 +428,23 @@ impl TrainSession {
                 train_run_args.add_target(&self.op_minimize);
                 self.session.run(&mut train_run_args)?;
 
+                let mut loss_run_args = SessionRunArgs::new();
+                loss_run_args.add_feed(&self.op_input, 0, &tensor_input);
+                loss_run_args.add_feed(&self.op_input_target_q, 0, &tensor_target_q);
+                loss_run_args.add_feed(&self.op_input_action, 0, &tensor_action);
+                loss_run_args.add_target(&self.op_loss);
+
+                let fetch_token = loss_run_args.request_fetch(&self.op_loss, 0);
+                self.session.run(&mut loss_run_args)?;
+
+                let loss = loss_run_args.fetch::<f32>(fetch_token)?;
+
+                if recent_losses.len() == 100 {
+                    recent_losses.pop_front();
+                }
+
+                recent_losses.push_back(loss[0]);
+
                 if self.played_turn_count % 1000 == 0 {
                     println!(
                         "Played {} turns, updating target network.",
@@ -441,64 +459,7 @@ impl TrainSession {
 
                     self.session.run(&mut update_run_args)?;
 
-                    // let mut tensor_input = Tensor::<f32>::new(&[
-                    //     self.replay_memory.len() as u64,
-                    //     Environment::BOARD_SIZE as u64,
-                    //     Environment::BOARD_SIZE as u64,
-                    //     1,
-                    // ]);
-                    // let mut tensor_target_q =
-                    //     Tensor::<f32>::new(&[self.replay_memory.len() as u64]);
-                    // let mut tensor_action =
-                    //     Tensor::<i32>::new(&[self.replay_memory.len() as u64, 2]);
-
-                    // for (index, transition) in self.replay_memory.iter().enumerate() {
-                    //     let target_q = match &transition.next_state {
-                    //         Some(next_state) => {
-                    //             let mut tensor = Tensor::new(&[
-                    //                 1,
-                    //                 Environment::BOARD_SIZE as u64,
-                    //                 Environment::BOARD_SIZE as u64,
-                    //                 1,
-                    //             ]);
-                    //             tensor[..].copy_from_slice(next_state);
-
-                    //             let mut eval_run_args = SessionRunArgs::new();
-                    //             eval_run_args.add_feed(&self.op_target_input, 0, &tensor);
-                    //             eval_run_args.add_target(&self.op_target_output);
-
-                    //             let fetch_token =
-                    //                 eval_run_args.request_fetch(&self.op_target_output, 0);
-                    //             self.session.run(&mut eval_run_args)?;
-
-                    //             let target_output = eval_run_args.fetch::<f32>(fetch_token)?;
-                    //             let future_q = *target_output[..]
-                    //                 .iter()
-                    //                 .max_by(|q_lhs, q_rhs| f32::total_cmp(q_lhs, q_rhs))
-                    //                 .unwrap();
-                    //             transition.reward + 0.5 * future_q
-                    //         }
-                    //         None => transition.reward,
-                    //     };
-                    //     tensor_input[index * Environment::BOARD_SIZE * Environment::BOARD_SIZE
-                    //         ..(index + 1) * Environment::BOARD_SIZE * Environment::BOARD_SIZE]
-                    //         .copy_from_slice(&transition.state);
-                    //     tensor_target_q[index] = target_q;
-                    //     tensor_action[index * 2] = index as i32;
-                    //     tensor_action[index * 2 + 1] = transition.action as i32;
-                    // }
-
-                    // let mut loss_run_args = SessionRunArgs::new();
-                    // loss_run_args.add_feed(&self.op_input, 0, &tensor_input);
-                    // loss_run_args.add_feed(&self.op_input_target_q, 0, &tensor_target_q);
-                    // loss_run_args.add_feed(&self.op_input_action, 0, &tensor_action);
-
-                    // let loss_token = loss_run_args.request_fetch(&self.op_loss, 0);
-                    // loss_run_args.add_target(&self.op_loss);
-                    // self.session.run(&mut loss_run_args)?;
-
-                    // let loss = loss_run_args.fetch::<f32>(loss_token)?;
-                    // println!("Loss: {}", loss);
+                    println!("Loss: {}", recent_losses.iter().sum::<f32>() / 100f32);
 
                     let mut win = 0;
                     let mut lose = 0;
