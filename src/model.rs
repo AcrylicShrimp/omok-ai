@@ -191,7 +191,6 @@ fn build_graph(
         b.output().clone(),
         &mut scope.with_op_name("mm_bias_2"),
     )?;
-    let mm = leaky_relu(mm, &mut scope.with_op_name("mm_activation_2"))?;
     variables.push(w);
     variables.push(b);
 
