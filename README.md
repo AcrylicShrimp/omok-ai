@@ -4,4 +4,4 @@ This project is launched to implement [Gomoku](https://en.wikipedia.org/wiki/Gom
 
 ## Implementation
 
-Currenlty, this project is being implemented via [DQN](https://storage.googleapis.com/deepmind-media/dqn/DQNNaturePaper.pdf).
+Currently, this project is being implemented via [DQN](https://storage.googleapis.com/deepmind-media/dqn/DQNNaturePaper.pdf).
