@@ -103,8 +103,8 @@ impl TrainSession {
 
         let op_loss = mean(
             square(
-            sub(op_input_target_q.clone(), q, &mut model.scope)?,
-            &mut model.scope,
+                sub(op_input_target_q.clone(), q, &mut model.scope)?,
+                &mut model.scope,
             )?,
             constant(&[0], &mut model.scope)?,
             &mut model.scope,
@@ -411,7 +411,7 @@ impl TrainSession {
                 train_run_args.add_target(&self.op_minimize);
                 self.session.run(&mut train_run_args)?;
 
-                if self.played_turn_count % 1_0000 == 0 {
+                if self.played_turn_count % 1000 == 0 {
                     println!(
                         "Played {} turns, updating target network.",
                         self.played_turn_count
