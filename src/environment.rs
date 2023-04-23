@@ -67,50 +67,18 @@ impl Environment {
             Turn::White => Turn::Black,
         };
 
-        let horizontal_count =
-            1 + self.count_serial_stones(turn, index, &[-4, -3, -2, -1, 1, 2, 3, 4]);
-        let vertical_count = 1 + self.count_serial_stones(
-            turn,
-            index,
-            &[
-                -4 * Self::BOARD_SIZE as isize,
-                -3 * Self::BOARD_SIZE as isize,
-                -2 * Self::BOARD_SIZE as isize,
-                -1 * Self::BOARD_SIZE as isize,
-                1 * Self::BOARD_SIZE as isize,
-                2 * Self::BOARD_SIZE as isize,
-                3 * Self::BOARD_SIZE as isize,
-                4 * Self::BOARD_SIZE as isize,
-            ],
-        );
-        let diagonal_lt_rb_count = 1 + self.count_serial_stones(
-            turn,
-            index,
-            &[
-                -4 * Self::BOARD_SIZE as isize - 4,
-                -3 * Self::BOARD_SIZE as isize - 3,
-                -2 * Self::BOARD_SIZE as isize - 2,
-                -1 * Self::BOARD_SIZE as isize - 1,
-                1 * Self::BOARD_SIZE as isize + 1,
-                2 * Self::BOARD_SIZE as isize + 2,
-                3 * Self::BOARD_SIZE as isize + 3,
-                4 * Self::BOARD_SIZE as isize + 4,
-            ],
-        );
-        let diagonal_lb_rt_count = 1 + self.count_serial_stones(
-            turn,
-            index,
-            &[
-                -4 * Self::BOARD_SIZE as isize + 4,
-                -3 * Self::BOARD_SIZE as isize + 3,
-                -2 * Self::BOARD_SIZE as isize + 2,
-                -1 * Self::BOARD_SIZE as isize + 1,
-                1 * Self::BOARD_SIZE as isize - 1,
-                2 * Self::BOARD_SIZE as isize - 2,
-                3 * Self::BOARD_SIZE as isize - 3,
-                4 * Self::BOARD_SIZE as isize - 4,
-            ],
-        );
+        let horizontal_count = 1
+            + self.count_serial_stones(turn, index, &[(-1, 0), (-2, 0), (-3, 0), (-4, 0)])
+            + self.count_serial_stones(turn, index, &[(1, 0), (2, 0), (3, 0), (4, 0)]);
+        let vertical_count = 1
+            + self.count_serial_stones(turn, index, &[(0, -1), (0, -2), (0, -3), (0, -4)])
+            + self.count_serial_stones(turn, index, &[(0, 1), (0, 2), (0, 3), (0, 4)]);
+        let diagonal_lt_rb_count = 1
+            + self.count_serial_stones(turn, index, &[(-1, -1), (-2, -2), (-3, -3), (-4, -4)])
+            + self.count_serial_stones(turn, index, &[(1, 1), (2, 2), (3, 3), (4, 4)]);
+        let diagonal_lb_rt_count = 1
+            + self.count_serial_stones(turn, index, &[(-1, 1), (-2, 2), (-3, 3), (-4, 4)])
+            + self.count_serial_stones(turn, index, &[(1, -1), (2, -2), (3, -3), (4, -4)]);
 
         if horizontal_count == Self::SERIAL_STONE_COUNT
             || vertical_count == Self::SERIAL_STONE_COUNT
@@ -128,34 +96,31 @@ impl Environment {
         }
     }
 
-    fn count_serial_stones(&self, turn: Turn, index: usize, offset: &[isize]) -> usize {
-        let mut count = 0;
+    fn count_serial_stones(&self, turn: Turn, index: usize, offset: &[(isize, isize)]) -> usize {
         let is_black = match turn {
             Turn::Black => true,
             Turn::White => false,
         };
 
-        for &offset in offset {
-            let index = index as isize + offset;
+        let x = (index % Self::BOARD_SIZE) as isize;
+        let y = (index / Self::BOARD_SIZE) as isize;
+        let mut count = 0;
 
-            if index < 0 {
-                continue;
+        for &(offset_x, offset_y) in offset {
+            let x = x + offset_x;
+            let y = y + offset_y;
+            if x < 0 || Self::BOARD_SIZE as isize <= x || y < 0 || Self::BOARD_SIZE as isize <= y {
+                break;
             }
 
-            let index = index as usize;
-
-            if Self::BOARD_SIZE * Self::BOARD_SIZE <= index {
-                continue;
-            }
-
-            let stone = self.board[index];
+            let stone = self.board[(y * Self::BOARD_SIZE as isize + x) as usize];
             if stone.abs() < f32::EPSILON {
-                continue;
+                break;
             }
 
             let is_black_stone = 0f32 < stone;
             if is_black_stone != is_black {
-                continue;
+                break;
             }
 
             count += 1;
