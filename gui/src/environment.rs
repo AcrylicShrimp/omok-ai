@@ -13,7 +13,7 @@ impl Turn {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(serde::Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GameStatus {
     InProgress,
     Draw,
@@ -21,6 +21,7 @@ pub enum GameStatus {
     WhiteWin,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Environment {
     pub turn: Turn,
     pub board: [f32; Self::BOARD_SIZE * Self::BOARD_SIZE], // 19 * 19 board, 0 for empty, 1 for black, -1 for white

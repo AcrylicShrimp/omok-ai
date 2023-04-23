@@ -5,7 +5,6 @@ use tensorflow::{
 };
 
 pub struct Model {
-    pub scope: Scope,
     pub session: Session,
     pub op_input: Operation,
     pub op_output: Operation,
@@ -26,7 +25,6 @@ impl Model {
         let op_output = scope.graph().operation_by_name_required("output").unwrap();
 
         Model {
-            scope,
             session: bundle.session,
             op_input,
             op_output,
