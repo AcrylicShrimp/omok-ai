@@ -280,6 +280,7 @@ impl TrainSession {
                     let (index, _) = output[..]
                         .iter()
                         .enumerate()
+                        .filter(|(index, _)| env.legal_moves[*index])
                         .max_by(|(_, q_lhs), (_, q_rhs)| f32::total_cmp(&q_lhs, &q_rhs))
                         .unwrap();
 
