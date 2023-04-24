@@ -67,7 +67,7 @@ function getMakeStoneElement(width: number, height: number) {
         stone.style.top = `${y * cellHeight}px`;
         stone.style.width = `${cellWidth}px`;
         stone.style.height = `${cellHeight}px`;
-        stone.src = color > 0 ? BlackStone : WhiteStone;
+        stone.src = color === 1 ? BlackStone : WhiteStone;
         return stone;
     }
 }
