@@ -47,12 +47,7 @@ impl Environment {
         if turn == Turn::White {
             // Make the board from the perspective of opponent
             for i in 0..slice.len() {
-                if slice[i] == 1i32 {
-                    slice[i] = 2i32;
-                }
-                if slice[i] == 2i32 {
-                    slice[i] = 1i32;
-                }
+                slice[i] = -slice[i];
             }
         }
     }

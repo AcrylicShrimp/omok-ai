@@ -36,15 +36,17 @@ fn build_graph(
         .dtype(DataType::Int32)
         .shape([
             -1i64,
-            (Environment::BOARD_SIZE * Environment::BOARD_SIZE) as i64,
-            2i64,
+            Environment::BOARD_SIZE as i64,
+            Environment::BOARD_SIZE as i64,
+            3i64,
         ])
         .build(&mut scope.with_op_name(input_name.as_ref()))?;
 
     let weight = Variable::builder()
         .data_type(DataType::Float)
         .shape(&[
-            (Environment::BOARD_SIZE * Environment::BOARD_SIZE) as i64,
+            Environment::BOARD_SIZE as i64,
+            Environment::BOARD_SIZE as i64,
             3i64,
             16i64,
         ])
@@ -52,7 +54,8 @@ fn build_graph(
             RandomStandardNormal::new().dtype(DataType::Float).build(
                 constant(
                     &[
-                        (Environment::BOARD_SIZE * Environment::BOARD_SIZE) as i64,
+                        Environment::BOARD_SIZE as i64,
+                        Environment::BOARD_SIZE as i64,
                         3i64,
                         16i64,
                     ],
@@ -65,30 +68,16 @@ fn build_graph(
         )?)
         .build(&mut scope.with_op_name("embedding"))?;
 
-    let embedding = gather_nd(weight.output().clone(), input.clone(), scope)?;
+    let embedding = gather_nd(weight.output().clone(), input, scope)?;
     variables.push(weight);
-
-    let embedding_reshape = reshape(
-        embedding.clone(),
-        constant(
-            &[
-                -1i64,
-                Environment::BOARD_SIZE as i64,
-                Environment::BOARD_SIZE as i64,
-                16,
-            ],
-            scope,
-        )?,
-        &mut scope.with_op_name("reshape"),
-    )?;
 
     let filter = Variable::builder()
         .data_type(DataType::Float)
-        .shape(&[8i64, 8, 16, 16])
+        .shape(&[8i64, 8, 1, 16])
         .initial_value(mul(
             RandomStandardNormal::new()
                 .dtype(DataType::Float)
-                .build(constant(&[8i64, 8, 16, 16], scope)?, scope)?,
+                .build(constant(&[8i64, 8, 1, 16], scope)?, scope)?,
             constant(2f32 / f32::sqrt(8f32 * 8f32 * 1f32), scope)?,
             scope,
         )?)
@@ -107,7 +96,7 @@ fn build_graph(
         .strides([1i64, 2, 2, 1])
         .padding("VALID")
         .build(
-            embedding_reshape.clone(),
+            embedding.clone(),
             filter.output().clone(),
             &mut scope.with_op_name("conv_1"),
         )?;
@@ -171,7 +160,7 @@ fn build_graph(
             RandomStandardNormal::new()
                 .dtype(DataType::Float)
                 .build(constant(&[288i64, 256], scope)?, scope)?,
-            constant(2f32 / f32::sqrt(288f32 * 3f32), scope)?,
+            constant(2f32 / f32::sqrt(288f32), scope)?,
             scope,
         )?)
         .build(&mut scope.with_op_name("w_1"))?;

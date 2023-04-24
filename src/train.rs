@@ -303,21 +303,13 @@ impl TrainSession {
                         .collect::<Vec<_>>();
                     legal_moves[rng.gen_range(0..legal_moves.len())]
                 } else {
-                    let mut tensor = Tensor::<i32>::new(&[
+                    let mut tensor = Tensor::new(&[
                         1,
-                        (Environment::BOARD_SIZE * Environment::BOARD_SIZE) as u64,
-                        2,
+                        Environment::BOARD_SIZE as u64,
+                        Environment::BOARD_SIZE as u64,
+                        1,
                     ]);
-
-                    let mut indexed_board = [0i32; Environment::BOARD_SIZE * Environment::BOARD_SIZE * 2];
-                    for y in 0..Environment::BOARD_SIZE {
-                        for x in 0..Environment::BOARD_SIZE {
-                            indexed_board[(y * Environment::BOARD_SIZE + x) * 2] = (y * Environment::BOARD_SIZE + x) as i32;
-                            indexed_board[(y * Environment::BOARD_SIZE + x) * 2 + 1] = board[y * Environment::BOARD_SIZE + x];
-                        }
-                    }
-
-                    tensor.copy_from_slice(&indexed_board);
+                    tensor[..].copy_from_slice(&board);
 
                     let mut eval_run_args = SessionRunArgs::new();
                     eval_run_args.add_feed(&self.op_input, 0, &tensor);
@@ -389,10 +381,10 @@ impl TrainSession {
 
                 let mut tensor_input = Tensor::<i32>::new(&[
                     32,
-                    (Environment::BOARD_SIZE * Environment::BOARD_SIZE) as u64,
-                    2,
+                    Environment::BOARD_SIZE as u64,
+                    Environment::BOARD_SIZE as u64,
+                    3,
                 ]);
-
                 let mut tensor_target_q = Tensor::<f32>::new(&[32]);
                 let mut tensor_action = Tensor::<i32>::new(&[32, 2]);
 
@@ -404,21 +396,13 @@ impl TrainSession {
                     let target_q = match &transition.next_state {
                         Some(next_state) => {
                             // Double DQN
-                            let mut tensor = Tensor::<i32>::new(&[
+                            let mut tensor = Tensor::new(&[
                                 1,
-                                (Environment::BOARD_SIZE * Environment::BOARD_SIZE) as u64,
-                                2,
+                                Environment::BOARD_SIZE as u64,
+                                Environment::BOARD_SIZE as u64,
+                                1,
                             ]);
-        
-                            let mut indexed_board = [0i32; Environment::BOARD_SIZE * Environment::BOARD_SIZE * 2];
-                            for y in 0..Environment::BOARD_SIZE {
-                                for x in 0..Environment::BOARD_SIZE {
-                                    indexed_board[(y * Environment::BOARD_SIZE + x) * 2] = (y * Environment::BOARD_SIZE + x) as i32;
-                                    indexed_board[(y * Environment::BOARD_SIZE + x) * 2 + 1] = board[y * Environment::BOARD_SIZE + x];
-                                }
-                            }
-
-                            tensor[..].copy_from_slice(&indexed_board);
+                            tensor[..].copy_from_slice(next_state);
 
                             let mut online_eval_run_args = SessionRunArgs::new();
                             online_eval_run_args.add_feed(&self.op_input, 0, &tensor);
@@ -429,7 +413,6 @@ impl TrainSession {
                             self.session.run(&mut online_eval_run_args)?;
 
                             let output = online_eval_run_args.fetch::<f32>(fetch_token)?;
-
                             let action = output[..]
                                 .iter()
                                 .enumerate()
@@ -541,21 +524,13 @@ impl TrainSession {
             let mut input = [0i32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
             env.copy_board(env.turn, &mut input);
 
-            let mut tensor = Tensor::<i32>::new(&[
+            let mut tensor = Tensor::new(&[
                 1,
-                (Environment::BOARD_SIZE * Environment::BOARD_SIZE) as u64,
-                2,
+                Environment::BOARD_SIZE as u64,
+                Environment::BOARD_SIZE as u64,
+                1,
             ]);
-
-            let mut indexed_board = [0i32; Environment::BOARD_SIZE * Environment::BOARD_SIZE * 2];
-            for y in 0..Environment::BOARD_SIZE {
-                for x in 0..Environment::BOARD_SIZE {
-                    indexed_board[(y * Environment::BOARD_SIZE + x) * 2] = (y * Environment::BOARD_SIZE + x) as i32;
-                    indexed_board[(y * Environment::BOARD_SIZE + x) * 2 + 1] = input[y * Environment::BOARD_SIZE + x];
-                }
-            }
-
-            tensor[..].copy_from_slice(&indexed_board);
+            tensor[..].copy_from_slice(&input);
 
             let mut eval_run_args = SessionRunArgs::new();
             eval_run_args.add_feed(&self.op_input, 0, &tensor);
