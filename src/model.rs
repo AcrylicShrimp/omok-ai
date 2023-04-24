@@ -1,6 +1,6 @@
 use tensorflow::{
     ops::{
-        bias_add, broadcast_to, constant, leaky_relu, mat_mul, mul, reshape, Conv2D, Placeholder,
+        bias_add, broadcast_to, constant, leaky_relu, mat_mul, mul, reshape, get_element_at_index, Conv2D, Placeholder,
         RandomStandardNormal,
     },
     DataType, Scope, Status, Variable,
@@ -33,7 +33,7 @@ fn build_graph(
     let mut variables = Vec::new();
 
     let input = Placeholder::new()
-        .dtype(DataType::Float)
+        .dtype(DataType::Int64)
         .shape([
             -1i64,
             Environment::BOARD_SIZE as i64,
@@ -41,6 +41,44 @@ fn build_graph(
             1,
         ])
         .build(&mut scope.with_op_name(input_name.as_ref()))?;
+
+    let weight = Variable::builder()
+        .data_type(DataType::Float)
+        .shape(&[
+            Environment::BOARD_SIZE as i64,
+            Environment::BOARD_SIZE as i64,
+            3i64,
+            3i64,
+        ])
+        .initial_value(mul(
+            RandomStandardNormal::new().dtype(DataType::Float).build(
+                constant(
+                    &[
+                        Environment::BOARD_SIZE as i64,
+                        Environment::BOARD_SIZE as i64,
+                        3,
+                        3,
+                    ],
+                    scope,
+                )?,
+                scope,
+            )?,
+            constant(2f32 / f32::sqrt(3f32 * 3f32 * 3f32), scope)?,
+            scope,
+        )?)
+        .build(&mut scope.with_op_name("embedding"))?;
+    let weight = reshape(
+        weight.output().clone(),
+        constant(&[
+            Environment::BOARD_SIZE as i64,
+            Environment::BOARD_SIZE as i64,
+            3i64,
+            3i64,
+        ], scope)?,
+        scope,
+    )?;
+
+    let embedding = get_element_at_index(weight, input.clone(), scope)?;
 
     let filter = Variable::builder()
         .data_type(DataType::Float)
@@ -67,7 +105,7 @@ fn build_graph(
         .strides([1i64, 2, 2, 1])
         .padding("VALID")
         .build(
-            input.clone(),
+            embedding.clone(),
             filter.output().clone(),
             &mut scope.with_op_name("conv_1"),
         )?;
