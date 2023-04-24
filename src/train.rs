@@ -17,8 +17,8 @@ use tensorflow::{
 };
 
 pub struct Transition {
-    pub state: [i32; Environment::BOARD_SIZE * Environment::BOARD_SIZE],
-    pub next_state: Option<[i32; Environment::BOARD_SIZE * Environment::BOARD_SIZE]>,
+    pub state: [f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE],
+    pub next_state: Option<[f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE]>,
     pub action: usize,
     pub reward: f32,
 }
@@ -34,9 +34,9 @@ impl Display for Transition {
                     "{}",
                     if index == self.action {
                         "A"
-                    } else if stone == 0i32 {
+                    } else if f32::abs(stone) < f32::EPSILON {
                         "-"
-                    } else if stone == 1i32 {
+                    } else if 0f32 < stone {
                         "O"
                     } else {
                         "X"
@@ -174,7 +174,7 @@ impl TrainSession {
 
     pub fn init(&self) -> Result<(), Status> {
         let mut init = SessionRunArgs::new();
-        
+
         for variable in &self.model.variables {
             init.add_target(variable.initializer());
         }
@@ -207,7 +207,7 @@ impl TrainSession {
 
             loop {
                 let turn = env.turn;
-                let mut board = [0i32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
+                let mut board = [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
                 env.copy_board(turn, &mut board);
 
                 let legal_moves = env
@@ -221,7 +221,7 @@ impl TrainSession {
                 let (reward, next_board) = match env.place_stone(random_move) {
                     GameStatus::InProgress => {
                         let mut next_board =
-                            [0i32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
+                            [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
                         env.copy_board(turn, &mut next_board);
                         (0f32, Some(next_board))
                     }
@@ -258,12 +258,12 @@ impl TrainSession {
 
                 if !has_next_board {
                     let mut opponent_board =
-                        [0i32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
+                        [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
                     env.copy_board(turn.opponent(), &mut opponent_board);
 
                     assert!(random_move != last_move);
-                    opponent_board[random_move] = 0i32;
-                    opponent_board[last_move] = 0i32;
+                    opponent_board[random_move] = 0f32;
+                    opponent_board[last_move] = 0f32;
 
                     self.replay_memory.push_back(Transition {
                         state: opponent_board,
@@ -290,7 +290,7 @@ impl TrainSession {
 
             loop {
                 let turn = env.turn;
-                let mut board = [0i32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
+                let mut board = [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
                 env.copy_board(turn, &mut board);
 
                 let epsilon = f64::max(0.1f64, 1f64 - (self.played_turn_count as f64 / 1_0000f64));
@@ -332,7 +332,7 @@ impl TrainSession {
                 let (reward, next_board) = match env.place_stone(selected_move) {
                     GameStatus::InProgress => {
                         let mut next_board =
-                            [0i32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
+                            [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
                         env.copy_board(turn, &mut next_board);
                         (0f32, Some(next_board))
                     }
@@ -357,12 +357,12 @@ impl TrainSession {
                 if !has_next_board {
                     // Restore the board to the state before the last two move.
                     let mut opponent_board =
-                        [0i32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
+                        [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
                     env.copy_board(turn.opponent(), &mut opponent_board);
 
                     assert!(selected_move != last_move);
-                    opponent_board[selected_move] = 0i32;
-                    opponent_board[last_move] = 0i32;
+                    opponent_board[selected_move] = 0f32;
+                    opponent_board[last_move] = 0f32;
 
                     if self.replay_memory.len() == 1_0000 {
                         self.replay_memory.pop_front();
@@ -379,11 +379,11 @@ impl TrainSession {
                 last_move = selected_move;
                 self.played_turn_count += 1;
 
-                let mut tensor_input = Tensor::<i32>::new(&[
+                let mut tensor_input = Tensor::<f32>::new(&[
                     32,
                     Environment::BOARD_SIZE as u64,
                     Environment::BOARD_SIZE as u64,
-                    3,
+                    1,
                 ]);
                 let mut tensor_target_q = Tensor::<f32>::new(&[32]);
                 let mut tensor_action = Tensor::<i32>::new(&[32, 2]);
@@ -416,7 +416,7 @@ impl TrainSession {
                             let action = output[..]
                                 .iter()
                                 .enumerate()
-                                .filter(|(index, _)| next_state[*index] == 0i32)
+                                .filter(|(index, _)| f32::abs(next_state[*index]) < f32::EPSILON)
                                 .max_by(|(_, q_lhs), (_, q_rhs)| f32::total_cmp(q_lhs, q_rhs))
                                 .unwrap()
                                 .0;
@@ -521,7 +521,7 @@ impl TrainSession {
         let mut env = Environment::new();
 
         loop {
-            let mut input = [0i32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
+            let mut input = [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
             env.copy_board(env.turn, &mut input);
 
             let mut tensor = Tensor::new(&[
