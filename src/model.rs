@@ -1,7 +1,7 @@
 use tensorflow::{
     ops::{
-        bias_add, broadcast_to, constant, leaky_relu, mat_mul, mul, reshape, get_element_at_index, Conv2D, Placeholder,
-        RandomStandardNormal,
+        bias_add, broadcast_to, constant, gather_nd, leaky_relu, mat_mul, mul, reshape, Conv2D,
+        Placeholder, RandomStandardNormal,
     },
     DataType, Scope, Status, Variable,
 };
@@ -33,12 +33,12 @@ fn build_graph(
     let mut variables = Vec::new();
 
     let input = Placeholder::new()
-        .dtype(DataType::Int64)
+        .dtype(DataType::Int32)
         .shape([
             -1i64,
             Environment::BOARD_SIZE as i64,
             Environment::BOARD_SIZE as i64,
-            1,
+            3i64,
         ])
         .build(&mut scope.with_op_name(input_name.as_ref()))?;
 
@@ -48,7 +48,7 @@ fn build_graph(
             Environment::BOARD_SIZE as i64,
             Environment::BOARD_SIZE as i64,
             3i64,
-            3i64,
+            16i64,
         ])
         .initial_value(mul(
             RandomStandardNormal::new().dtype(DataType::Float).build(
@@ -56,8 +56,8 @@ fn build_graph(
                     &[
                         Environment::BOARD_SIZE as i64,
                         Environment::BOARD_SIZE as i64,
-                        3,
-                        3,
+                        3i64,
+                        16i64,
                     ],
                     scope,
                 )?,
@@ -67,18 +67,9 @@ fn build_graph(
             scope,
         )?)
         .build(&mut scope.with_op_name("embedding"))?;
-    let weight = reshape(
-        weight.output().clone(),
-        constant(&[
-            Environment::BOARD_SIZE as i64,
-            Environment::BOARD_SIZE as i64,
-            3i64,
-            3i64,
-        ], scope)?,
-        scope,
-    )?;
 
-    let embedding = get_element_at_index(weight, input.clone(), scope)?;
+    let embedding = gather_nd(weight.output().clone(), input, scope)?;
+    variables.push(weight);
 
     let filter = Variable::builder()
         .data_type(DataType::Float)
