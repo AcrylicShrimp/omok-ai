@@ -1,24 +1,16 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+#![cfg_attr(
+    all(not(debug_assertions), target_os = "windows"),
+    windows_subsystem = "windows"
+)]
+
+use std::sync::Mutex;
+use tauri::Manager;
+
+use crate::environment::*;
+use crate::model::*;
 
 mod environment;
 mod model;
-
-use crate::{environment::Environment, model::Model};
-use eframe::{run_native, App, NativeOptions};
-use egui::{vec2, Button, Color32, PointerButton, RichText, Rounding, Widget};
-use environment::{GameStatus, Turn};
-
-fn main() -> Result<(), eframe::Error> {
-    let options = NativeOptions {
-        initial_window_size: Some(vec2(800.0, 600.0)),
-        ..Default::default()
-    };
-    run_native(
-        "Omok AI",
-        options,
-        Box::new(|_cc| Box::new(Application::new())),
-    )
-}
 
 struct Application {
     env: Environment,
@@ -41,13 +33,13 @@ impl Application {
         }
     }
 
-    fn on_click_button(&mut self, x: usize, y: usize) {
+    fn on_click_button(&mut self, x: usize, y: usize) -> &mut Self {
         match self.env_status {
             GameStatus::InProgress => {
                 let index = y * Environment::BOARD_SIZE + x;
 
                 if self.env.turn != Turn::White || !self.env.legal_moves[index] {
-                    return;
+                    return self;
                 }
 
                 self.place_stone(index);
@@ -61,6 +53,8 @@ impl Application {
                 self.env_status = GameStatus::InProgress;
             }
         }
+
+        self
     }
 
     fn place_stone(&mut self, index: usize) {
@@ -75,48 +69,29 @@ impl Application {
     }
 }
 
-impl App for Application {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.label(
-                RichText::new(match self.env_status {
-                    GameStatus::InProgress => "Your move!",
-                    GameStatus::Draw => "Draw",
-                    GameStatus::BlackWin => "AI wins!",
-                    GameStatus::WhiteWin => "You win!",
-                })
-                .heading()
-                .color(Color32::WHITE),
-            );
+#[derive(serde::Serialize)]
+struct ClickResponse {
+    board: Vec<i32>,
+    game_status: GameStatus,
+}
 
-            for y in 0..Environment::BOARD_SIZE {
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-                        for x in 0..Environment::BOARD_SIZE {
-                            let stone = self.env.board[y * Environment::BOARD_SIZE + x];
+fn main() {
+    tauri::Builder::default()
+        .manage(Mutex::new(Application::new()))
+        .invoke_handler(tauri::generate_handler![on_click])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
 
-                            let color = if f32::abs(stone) < f32::EPSILON {
-                                Color32::WHITE
-                            } else if 0f32 < stone {
-                                Color32::BLUE
-                            } else {
-                                Color32::from_rgb(255u8, 127u8, 0)
-                            };
+#[tauri::command]
+fn on_click(state: tauri::State<Mutex<Application>>, x: usize, y: usize) -> ClickResponse {
+    println!("{} {}", x, y);
 
-                            let button = Button::new("")
-                                .fill(color)
-                                .frame(true)
-                                .rounding(Rounding::none())
-                                .min_size(vec2(30.0, 30.0));
-                            if button.ui(ui).clicked_by(PointerButton::Primary) {
-                                self.on_click_button(x, y);
-                            }
-                        }
-                    });
-                });
-            }
-        });
+    let mut state = state.lock().unwrap();
+    state.on_click_button(x, y);
+
+    ClickResponse {
+        board: state.env.board.into(),
+        game_status: state.env_status,
     }
 }

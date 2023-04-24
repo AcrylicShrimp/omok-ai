@@ -13,7 +13,7 @@ impl Turn {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(serde::Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GameStatus {
     InProgress,
     Draw,
@@ -21,9 +21,10 @@ pub enum GameStatus {
     WhiteWin,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Environment {
     pub turn: Turn,
-    pub board: [f32; Self::BOARD_SIZE * Self::BOARD_SIZE], // 19 * 19 board, 0 for empty, 1 for black, -1 for white
+    pub board: [i32; Self::BOARD_SIZE * Self::BOARD_SIZE], // 19 * 19 board, 0 for empty, 1 for black, -1 for white
     pub legal_moves: [bool; Self::BOARD_SIZE * Self::BOARD_SIZE],
     pub legal_move_count: usize,
 }
@@ -35,13 +36,13 @@ impl Environment {
     pub fn new() -> Self {
         Environment {
             turn: Turn::Black,
-            board: [0f32; Self::BOARD_SIZE * Self::BOARD_SIZE],
+            board: [0i32; Self::BOARD_SIZE * Self::BOARD_SIZE],
             legal_moves: [true; Self::BOARD_SIZE * Self::BOARD_SIZE],
             legal_move_count: Self::BOARD_SIZE * Self::BOARD_SIZE,
         }
     }
 
-    pub fn copy_board(&self, turn: Turn, slice: &mut [f32; Self::BOARD_SIZE * Self::BOARD_SIZE]) {
+    pub fn copy_board(&self, turn: Turn, slice: &mut [i32; Self::BOARD_SIZE * Self::BOARD_SIZE]) {
         slice.copy_from_slice(&self.board[..]);
 
         if turn == Turn::White {
@@ -54,8 +55,8 @@ impl Environment {
 
     pub fn place_stone(&mut self, index: usize) -> GameStatus {
         self.board[index] = match self.turn {
-            Turn::Black => 1f32,
-            Turn::White => -1f32,
+            Turn::Black => 1i32,
+            Turn::White => 2i32,
         };
 
         self.legal_moves[index] = false;
@@ -117,11 +118,11 @@ impl Environment {
             }
 
             let stone = self.board[(y * Self::BOARD_SIZE as isize + x) as usize];
-            if stone.abs() < f32::EPSILON {
+            if stone == 0 {
                 break;
             }
 
-            let is_black_stone = 0f32 < stone;
+            let is_black_stone = stone == 1;
             if is_black_stone != is_black {
                 break;
             }
@@ -143,51 +144,51 @@ mod test {
         assert_eq!(env.turn, Turn::Black);
 
         assert_eq!(env.place_stone(0), GameStatus::InProgress);
-        assert_eq!(env.board[0], 1f32);
+        assert_eq!(env.board[0], 1i32);
         assert_eq!(env.turn, Turn::White);
 
         assert_eq!(env.place_stone(1), GameStatus::InProgress);
-        assert_eq!(env.board[1], -1f32);
+        assert_eq!(env.board[1], 2i32);
         assert_eq!(env.turn, Turn::Black);
 
         assert_eq!(env.place_stone(2), GameStatus::InProgress);
-        assert_eq!(env.board[2], 1f32);
+        assert_eq!(env.board[2], 1i32);
         assert_eq!(env.turn, Turn::White);
 
         assert_eq!(env.place_stone(3), GameStatus::InProgress);
-        assert_eq!(env.board[3], -1f32);
+        assert_eq!(env.board[3], 2i32);
         assert_eq!(env.turn, Turn::Black);
 
         assert_eq!(env.place_stone(4), GameStatus::InProgress);
-        assert_eq!(env.board[4], 1f32);
+        assert_eq!(env.board[4], 1i32);
         assert_eq!(env.turn, Turn::White);
 
         assert_eq!(env.place_stone(5), GameStatus::InProgress);
-        assert_eq!(env.board[5], -1f32);
+        assert_eq!(env.board[5], 2i32);
         assert_eq!(env.turn, Turn::Black);
 
         assert_eq!(env.place_stone(6), GameStatus::InProgress);
-        assert_eq!(env.board[6], 1f32);
+        assert_eq!(env.board[6], 1i32);
         assert_eq!(env.turn, Turn::White);
 
         assert_eq!(env.place_stone(7), GameStatus::InProgress);
-        assert_eq!(env.board[7], -1f32);
+        assert_eq!(env.board[7], 2i32);
         assert_eq!(env.turn, Turn::Black);
 
         assert_eq!(env.place_stone(8), GameStatus::InProgress);
-        assert_eq!(env.board[8], 1f32);
+        assert_eq!(env.board[8], 1i32);
         assert_eq!(env.turn, Turn::White);
 
         assert_eq!(env.place_stone(9), GameStatus::InProgress);
-        assert_eq!(env.board[9], -1f32);
+        assert_eq!(env.board[9], 2i32);
         assert_eq!(env.turn, Turn::Black);
 
         assert_eq!(env.place_stone(10), GameStatus::InProgress);
-        assert_eq!(env.board[10], 1f32);
+        assert_eq!(env.board[10], 1i32);
         assert_eq!(env.turn, Turn::White);
 
         assert_eq!(env.place_stone(11), GameStatus::InProgress);
-        assert_eq!(env.board[11], -1f32);
+        assert_eq!(env.board[11], 2i32);
         assert_eq!(env.turn, Turn::Black);
     }
 
