@@ -32,11 +32,22 @@ impl Model {
     }
 
     pub fn eval_action_values(&mut self, env: &Environment) -> Vec<f32> {
-        let mut board = [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
+        let mut board = [0i32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
         env.copy_board(env.turn, &mut board);
 
-        let mut input = Tensor::new(&[1, 19, 19, 1]);
-        input.copy_from_slice(&board[..]);
+        let mut input = Tensor::new(&[1, 19, 19, 2]);
+
+        let mut indexed_board = [0i32; Environment::BOARD_SIZE * Environment::BOARD_SIZE * 2];
+        for y in 0..Environment::BOARD_SIZE {
+            for x in 0..Environment::BOARD_SIZE {
+                indexed_board[(y * Environment::BOARD_SIZE + x) * 2] =
+                    (y * Environment::BOARD_SIZE + x) as i32;
+                indexed_board[(y * Environment::BOARD_SIZE + x) * 2 + 1] =
+                    board[y * Environment::BOARD_SIZE + x];
+            }
+        }
+
+        input.copy_from_slice(&indexed_board[..]);
 
         let mut eval_run_args = SessionRunArgs::new();
         eval_run_args.add_feed(&self.op_input, 0, &input);

@@ -71,7 +71,7 @@ impl Application {
 
 #[derive(serde::Serialize)]
 struct ClickResponse {
-    board: Vec<f32>,
+    board: Vec<i32>,
     game_status: GameStatus,
 }
 
