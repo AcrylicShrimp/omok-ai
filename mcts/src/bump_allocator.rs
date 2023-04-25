@@ -7,7 +7,7 @@ pub struct BumpAllocator<T> {
     freed: Vec<*mut T>,
     active_page: BumpAllocatorPage<T>,
     pages: Vec<BumpAllocatorPage<T>>,
-    phandom_data: std::marker::PhantomData<T>,
+    phandom_data: PhantomData<T>,
 }
 
 impl<T> BumpAllocator<T> {
@@ -18,7 +18,7 @@ impl<T> BumpAllocator<T> {
             freed: Vec::new(),
             active_page: BumpAllocatorPage::new(Self::PAGE_SIZE),
             pages: Vec::new(),
-            phandom_data: std::marker::PhantomData,
+            phandom_data: PhantomData,
         }
     }
 
