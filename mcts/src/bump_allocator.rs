@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     marker::PhantomData,
     mem::{replace, size_of},
 };
@@ -45,6 +46,18 @@ impl<T> BumpAllocator<T> {
     }
 }
 
+impl<T> Drop for BumpAllocator<T> {
+    fn drop(&mut self) {
+        let already_freed = HashSet::from_iter(self.freed.iter().copied());
+
+        self.active_page.drop_all(&already_freed);
+
+        for page in &mut self.pages {
+            page.drop_all(&already_freed);
+        }
+    }
+}
+
 pub struct BumpAllocatorPage<T> {
     memory: Vec<u8>,
     capacity: usize,
@@ -73,5 +86,17 @@ impl<T> BumpAllocatorPage<T> {
             unsafe { ((&mut self.memory).as_mut_ptr() as *mut T).offset(self.offset as isize) };
         self.offset += 1;
         ptr
+    }
+
+    fn drop_all(&mut self, already_freed: &HashSet<*mut T>) {
+        let base_ptr = (&mut self.memory).as_mut_ptr() as *mut T;
+
+        for offset in 0..self.offset {
+            let ptr = unsafe { base_ptr.offset(offset as isize) };
+
+            if !already_freed.contains(&ptr) {
+                unsafe { ptr.drop_in_place() };
+            }
+        }
     }
 }
