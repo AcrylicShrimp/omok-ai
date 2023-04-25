@@ -41,16 +41,16 @@ impl<S> Node<S> {
         }
     }
 
-    pub fn expand(
-        &self,
+    pub fn expand<'p, 'c>(
+        &'p self,
         allocator: &mut BumpAllocator<Self>,
         max_children: usize,
         state: S,
-    ) -> *const Self {
+    ) -> &'c Self {
         let child = allocator.allocate(Self::new(Some(self), max_children, state));
         let mut children = self.children.write();
         children.push(child);
-        child
+        unsafe { &*child }
     }
 
     pub fn propagate(&self, wins: u64, loses: u64) {
