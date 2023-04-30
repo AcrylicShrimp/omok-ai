@@ -1,20 +1,28 @@
 mod bump_allocator;
 mod node;
+mod state;
 
 pub use bump_allocator::*;
 pub use node::*;
+pub use state::*;
 
 use parking_lot::Mutex;
 
-pub struct MCTS<S> {
+pub struct MCTS<S>
+where
+    S: State,
+{
     root: *mut Node<S>,
     allocator: Mutex<BumpAllocator<Node<S>>>,
 }
 
-impl<S> MCTS<S> {
-    pub fn new(max_children: usize, root_state: S) -> Self {
+impl<S> MCTS<S>
+where
+    S: State,
+{
+    pub fn new(root_state: S) -> Self {
         let mut allocator = BumpAllocator::new();
-        let root = allocator.allocate(Node::new(None, max_children, root_state));
+        let root = allocator.allocate(Node::new(None, None, 1f32, root_state));
         Self {
             root,
             allocator: Mutex::new(allocator),
@@ -25,32 +33,32 @@ impl<S> MCTS<S> {
         unsafe { &*self.root }
     }
 
-    pub fn select_leaf(&self, selector: impl Fn(&[*const Node<S>]) -> usize) -> &Node<S> {
+    pub fn select_leaf(&self, selector: impl Fn(&Node<S>, &[NodePtr<S>]) -> usize) -> &Node<S> {
         let root = unsafe { &*self.root };
         root.select_leaf(selector)
     }
 
-    pub fn expand<'p, 'c>(&self, node: &'p Node<S>, max_children: usize, state: S) -> &'c Node<S> {
-        node.expand(&mut self.allocator.lock(), max_children, state)
+    pub fn expand<'p, 'c>(&self, node: &'p Node<S>, action: usize, state: S) -> &'c Node<S> {
+        node.expand(action, state, &mut self.allocator.lock())
     }
 
     pub fn transition(&mut self, children_index: usize) {
         let allocator = &mut self.allocator.lock();
 
         let new_root = {
-        let root = unsafe { &mut *self.root };
-        let root_children = root.children.read();
+            let root = unsafe { &mut *self.root };
+            let root_children = root.children.read();
 
-        for index in 0..root_children.len() {
-            if index == children_index {
-                continue;
-            }
+            for index in 0..root_children.len() {
+                if index == children_index {
+                    continue;
+                }
 
                 dealloc_node(root_children[index].ptr as *mut Node<S>, allocator);
-        }
+            }
 
             let new_root = unsafe { &mut *(root_children[children_index].ptr as *mut Node<S>) };
-        new_root.parent = None;
+            new_root.parent = None;
             new_root as *mut Node<S>
         };
 

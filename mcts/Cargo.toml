@@ -6,5 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+atomic_float = { version = "0.1" }
 parking_lot = { version = "0.12", features = ["hardware-lock-elision"] }
 rand = { version = "0.8" }

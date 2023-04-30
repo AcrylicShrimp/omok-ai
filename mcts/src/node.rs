@@ -1,71 +1,121 @@
-use crate::bump_allocator::BumpAllocator;
+use crate::{bump_allocator::BumpAllocator, state::State, Policy};
+use atomic_float::AtomicF32;
 use parking_lot::RwLock;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::{
+    ops::Deref,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
-pub struct Node<S> {
-    pub parent: Option<*const Node<S>>,
-    pub children: RwLock<Vec<*const Node<S>>>,
-    pub max_children: usize,
-    pub wins: AtomicU64,
-    pub loses: AtomicU64,
-    pub visits: AtomicU64,
+#[derive(Debug)]
+pub struct Node<S>
+where
+    S: State,
+{
+    pub parent: Option<NodePtr<S>>,
+    pub action: Option<usize>,
+    pub children: RwLock<Vec<NodePtr<S>>>,
+    pub p: f32,
+    pub w: AtomicF32,
+    pub n: AtomicU64,
     pub state: S,
 }
 
-impl<S> Node<S> {
-    pub fn new(parent: Option<*const Self>, max_children: usize, state: S) -> Self {
+impl<S> Node<S>
+where
+    S: State,
+{
+    pub fn new(parent: Option<NodePtr<S>>, action: Option<usize>, p: f32, state: S) -> Self {
         Self {
             parent,
+            action,
             children: RwLock::new(Vec::with_capacity(32)),
-            max_children,
-            wins: AtomicU64::new(0),
-            loses: AtomicU64::new(0),
-            visits: AtomicU64::new(0),
+            p,
+            w: AtomicF32::new(0.0),
+            n: AtomicU64::new(0),
             state,
         }
     }
 
-    pub fn select_leaf(&self, selector: impl Fn(&[*const Self]) -> usize) -> &Self {
+    pub fn select_leaf(&self, selector: impl Fn(&Self, &[NodePtr<S>]) -> usize) -> &Self {
+        let mut node = self;
         let mut children = self.children.read();
 
         loop {
             // If we have not reached the max number of children, return this node, since it is a leaf.
-            if children.len() != self.max_children {
-                return self;
+            if children.len() != node.state.available_actions_len() {
+                return node;
             }
 
-            let index = selector(&children);
-            let child = unsafe { &*children[index] };
-            let child_children = child.children.read();
+            let index = selector(node, &children);
+            node = unsafe { &*children[index].ptr };
+            let child_children = node.children.read();
             children = child_children;
         }
     }
 
     pub fn expand<'p, 'c>(
         &'p self,
-        allocator: &mut BumpAllocator<Self>,
-        max_children: usize,
+        action: usize,
         state: S,
+        allocator: &mut BumpAllocator<Self>,
     ) -> &'c Self {
-        let child = allocator.allocate(Self::new(Some(self), max_children, state));
+        let child = allocator.allocate(Self::new(
+            Some(NodePtr::new(self)),
+            Some(action),
+            self.state.policy().get(action),
+            state,
+        ));
         let mut children = self.children.write();
-        children.push(child);
+        children.push(NodePtr::new(child));
         unsafe { &*child }
     }
 
-    pub fn propagate(&self, wins: u64, loses: u64) {
+    pub fn propagate(&self, mut w: f32) {
         let mut node = self;
 
         loop {
-            node.wins.fetch_add(wins, Ordering::Relaxed);
-            node.loses.fetch_add(loses, Ordering::Relaxed);
-            node.visits.fetch_add(1, Ordering::Relaxed);
+            // Update n first; it encourages other threads to select other nodes.
+            node.n.fetch_add(1, Ordering::Relaxed);
+            node.w.fetch_add(w, Ordering::Relaxed);
 
-            if let Some(parent) = node.parent {
-                node = unsafe { &*parent };
+            w = -w;
+
+            if let Some(parent) = &node.parent {
+                node = &*parent;
             } else {
                 break;
             }
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct NodePtr<S>
+where
+    S: State,
+{
+    pub ptr: *const Node<S>,
+}
+
+impl<S> NodePtr<S>
+where
+    S: State,
+{
+    pub fn new(ptr: *const Node<S>) -> Self {
+        Self { ptr }
+    }
+}
+
+impl<S> Deref for NodePtr<S>
+where
+    S: State,
+{
+    type Target = Node<S>;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.ptr }
+    }
+}
+
+unsafe impl<S> Send for Node<S> where S: State {}
+unsafe impl<S> Send for NodePtr<S> where S: State {}
