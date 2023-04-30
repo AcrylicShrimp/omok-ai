@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Turn {
     Black,
@@ -9,6 +11,15 @@ impl Turn {
         match self {
             Turn::Black => Turn::White,
             Turn::White => Turn::Black,
+        }
+    }
+}
+
+impl Display for Turn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Turn::Black => write!(f, "Black"),
+            Turn::White => write!(f, "White"),
         }
     }
 }
