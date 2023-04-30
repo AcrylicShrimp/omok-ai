@@ -25,6 +25,7 @@ impl<T> BumpAllocator<T> {
 
     pub fn allocate(&mut self, value: T) -> *mut T {
         if let Some(ptr) = self.freed.pop() {
+            unsafe { ptr.write(value) };
             return ptr;
         }
 
