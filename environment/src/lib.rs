@@ -144,6 +144,75 @@ impl Environment {
     }
 }
 
+pub fn compute_state(
+    board: &[f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE],
+    index: usize,
+    legal_move_count: usize,
+) -> Option<f32> {
+    let horizontal_count = 1
+        + count_serial_stones(board, index, &[(-1, 0), (-2, 0), (-3, 0), (-4, 0), (-5, 0)])
+        + count_serial_stones(board, index, &[(1, 0), (2, 0), (3, 0), (4, 0), (5, 0)]);
+    let vertical_count = 1
+        + count_serial_stones(board, index, &[(0, -1), (0, -2), (0, -3), (0, -4), (0, -5)])
+        + count_serial_stones(board, index, &[(0, 1), (0, 2), (0, 3), (0, 4), (0, 5)]);
+    let diagonal_lt_rb_count =
+        1 + count_serial_stones(
+            board,
+            index,
+            &[(-1, -1), (-2, -2), (-3, -3), (-4, -4), (-5, -5)],
+        ) + count_serial_stones(board, index, &[(1, 1), (2, 2), (3, 3), (4, 4), (5, 5)]);
+    let diagonal_lb_rt_count = 1
+        + count_serial_stones(board, index, &[(-1, 1), (-2, 2), (-3, 3), (-4, 4), (-5, 5)])
+        + count_serial_stones(board, index, &[(1, -1), (2, -2), (3, -3), (4, -4), (5, -5)]);
+
+    if horizontal_count == Environment::SERIAL_STONE_COUNT
+        || vertical_count == Environment::SERIAL_STONE_COUNT
+        || diagonal_lt_rb_count == Environment::SERIAL_STONE_COUNT
+        || diagonal_lb_rt_count == Environment::SERIAL_STONE_COUNT
+    {
+        Some(1f32)
+    } else if legal_move_count == 0 {
+        Some(0f32)
+    } else {
+        None
+    }
+}
+
+fn count_serial_stones(
+    board: &[f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE],
+    index: usize,
+    offset: &[(isize, isize)],
+) -> usize {
+    let x = (index % Environment::BOARD_SIZE) as isize;
+    let y = (index / Environment::BOARD_SIZE) as isize;
+    let mut count = 0;
+
+    for &(offset_x, offset_y) in offset {
+        let x = x + offset_x;
+        let y = y + offset_y;
+        if x < 0
+            || Environment::BOARD_SIZE as isize <= x
+            || y < 0
+            || Environment::BOARD_SIZE as isize <= y
+        {
+            break;
+        }
+
+        let stone = board[(y * Environment::BOARD_SIZE as isize + x) as usize];
+        if stone.abs() < f32::EPSILON {
+            break;
+        }
+
+        if !(0f32 < stone) {
+            break;
+        }
+
+        count += 1;
+    }
+
+    count
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
