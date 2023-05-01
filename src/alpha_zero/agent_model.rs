@@ -116,3 +116,6 @@ impl AgentModel {
         self.saver.save(session, &self.scope.graph(), path)
     }
 }
+
+unsafe impl Send for AgentModel {}
+unsafe impl Sync for AgentModel {}
