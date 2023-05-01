@@ -81,6 +81,7 @@ impl Train {
     pub const TRAINING_COUNT: usize = 100;
     pub const BATCH_SIZE: usize = 32;
     pub const C_PUCT: f32 = 1.0;
+    pub const V_LOSS: f32 = 1f32;
 
     pub const TEST_EVALUATE_COUNT: usize = 300;
 
@@ -763,5 +764,5 @@ fn compute_ucb_1(parent_n: u64, node: &Node<BoardState>, c: f32) -> f32 {
     let q_s_a = node.w.load(Ordering::Relaxed) as f32 / (n as f32 + f32::EPSILON);
     let p_s_a = node.p;
     let bias = f32::sqrt(parent_n as f32) / (1 + n) as f32;
-    q_s_a + c * p_s_a * bias - node.v_loss.load(Ordering::Relaxed) as f32 * 0.1f32
+    q_s_a + c * p_s_a * bias - node.v_loss.load(Ordering::Relaxed) as f32 * Train::V_LOSS
 }
