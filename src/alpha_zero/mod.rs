@@ -18,7 +18,7 @@ use rayon::{
 };
 use std::{
     collections::VecDeque,
-    fs::{create_dir_all, remove_dir_all},
+    fs::{create_dir_all, remove_dir_all, remove_file},
     path::Path,
     sync::atomic::Ordering,
 };
@@ -755,7 +755,11 @@ impl Train {
         let path = Path::new("saves").join(name);
 
         if path.exists() {
-            remove_dir_all(&path).unwrap();
+            if path.is_dir() {
+                remove_dir_all(&path).unwrap();
+            } else {
+                remove_file(&path).unwrap();
+            }
         } else {
             let base = path.parent().unwrap();
 
