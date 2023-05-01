@@ -77,7 +77,7 @@ pub struct Train {
 impl Train {
     pub const REPLAY_MEMORY_SIZE: usize = 5_000;
     pub const EPISODE_COUNT: usize = 100;
-    pub const EVALUATE_COUNT: usize = 300;
+    pub const EVALUATE_COUNT: usize = 1600;
     pub const TRAINING_COUNT: usize = 100;
     pub const BATCH_SIZE: usize = 32;
     pub const C_PUCT: f32 = 1.0;
@@ -156,7 +156,7 @@ impl Train {
                                     let children = node.children.read();
                                     let available_actions = (0..Environment::BOARD_SIZE
                                         * Environment::BOARD_SIZE)
-                                    .filter(|&action| node.state.is_available_action(action))
+                                        .filter(|&action| node.state.is_available_action(action))
                                         .filter(|&action| {
                                             children
                                                 .iter()
@@ -477,7 +477,7 @@ impl Train {
                             let children = node.children.read();
                             let available_actions = (0..Environment::BOARD_SIZE
                                 * Environment::BOARD_SIZE)
-                            .filter(|&action| node.state.is_available_action(action))
+                                .filter(|&action| node.state.is_available_action(action))
                                 .filter(|&action| {
                                     children.iter().all(|child| child.action != Some(action))
                                 })
