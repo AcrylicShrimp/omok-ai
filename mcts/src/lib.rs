@@ -38,7 +38,12 @@ where
         root.select_leaf(selector)
     }
 
-    pub fn expand<'p, 'c>(&self, node: &'p Node<S>, action: usize, state: S) -> &'c Node<S> {
+    pub fn expand<'p, 'c>(
+        &self,
+        node: &'p Node<S>,
+        action: usize,
+        state: S,
+    ) -> Option<&'c Node<S>> {
         node.expand(action, state, &mut self.allocator.lock())
     }
 

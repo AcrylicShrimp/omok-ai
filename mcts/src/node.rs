@@ -3,7 +3,7 @@ use atomic_float::AtomicF32;
 use parking_lot::RwLock;
 use std::{
     ops::Deref,
-    sync::atomic::{AtomicU64, Ordering},
+    sync::atomic::{AtomicU32, AtomicU64, Ordering},
 };
 
 #[derive(Debug)]
@@ -17,6 +17,7 @@ where
     pub p: f32,
     pub w: AtomicF32,
     pub n: AtomicU64,
+    pub v_loss: AtomicU32,
     pub state: S,
 }
 
@@ -32,6 +33,7 @@ where
             p,
             w: AtomicF32::new(0.0),
             n: AtomicU64::new(0),
+            v_loss: AtomicU32::new(0),
             state,
         }
     }
@@ -46,7 +48,14 @@ where
                 return node;
             }
 
+            if children.len() == 0 {
+                return node;
+            }
+
+            node.v_loss.fetch_add(1, Ordering::Relaxed);
             let index = selector(node, &children);
+            node.v_loss.fetch_sub(1, Ordering::Relaxed);
+
             node = unsafe { &*children[index].ptr };
             let child_children = node.children.read();
             children = child_children;
@@ -58,16 +67,22 @@ where
         action: usize,
         state: S,
         allocator: &mut BumpAllocator<Self>,
-    ) -> &'c Self {
+    ) -> Option<&'c Self> {
+        let mut children = self.children.write();
+
+        if children.iter().any(|child| child.action == Some(action)) {
+            return None;
+        }
+
         let child = allocator.allocate(Self::new(
             Some(NodePtr::new(self)),
             Some(action),
             self.state.policy().get(action),
             state,
         ));
-        let mut children = self.children.write();
+
         children.push(NodePtr::new(child));
-        unsafe { &*child }
+        Some(unsafe { &*child })
     }
 
     pub fn propagate(&self, mut w: f32) {
