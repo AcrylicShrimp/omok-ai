@@ -60,7 +60,7 @@ impl<T> Drop for BumpAllocator<T> {
 }
 
 pub struct BumpAllocatorPage<T> {
-    memory: Vec<u8>,
+    memory: Box<[u8]>,
     capacity: usize,
     offset: usize,
     phandom_data: PhantomData<T>,
@@ -69,7 +69,7 @@ pub struct BumpAllocatorPage<T> {
 impl<T> BumpAllocatorPage<T> {
     pub fn new(capacity: usize) -> Self {
         Self {
-            memory: Vec::with_capacity(size_of::<T>() * capacity),
+            memory: vec![0; capacity * size_of::<T>()].into_boxed_slice(),
             capacity,
             offset: 0,
             phandom_data: PhantomData,
