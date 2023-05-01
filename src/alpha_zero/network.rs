@@ -20,15 +20,15 @@ impl Network {
     pub const INPUT_SIZE: i64 = Environment::BOARD_SIZE as i64;
     pub const INPUT_CHANNELS: i64 = 1;
 
-    pub const CONV0_FILTER_SIZE: i64 = 8;
-    pub const CONV0_CHANNELS: i64 = 16;
-    pub const CONV0_STRIDE: i64 = 2;
+    pub const CONV0_FILTER_SIZE: i64 = 5;
+    pub const CONV0_CHANNELS: i64 = 8;
+    pub const CONV0_STRIDE: i64 = 1;
 
     pub const CONV1_FILTER_SIZE: i64 = 4;
-    pub const CONV1_CHANNELS: i64 = 32;
-    pub const CONV1_STRIDE: i64 = 1;
+    pub const CONV1_CHANNELS: i64 = 16;
+    pub const CONV1_STRIDE: i64 = 2;
 
-    pub const FLATTEN_SIZE: i64 = 288;
+    pub const FLATTEN_SIZE: i64 = 256;
 
     pub const V_FC0_SIZE: i64 = 256;
     pub const V_FC1_SIZE: i64 = 128;
