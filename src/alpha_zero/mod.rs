@@ -1,7 +1,9 @@
 mod agent_model;
+mod model_io;
 mod network;
 
 pub use agent_model::*;
+pub use model_io::*;
 pub use network::*;
 
 use environment::{compute_state, Environment, GameStatus, Turn};
@@ -75,6 +77,8 @@ pub struct Train {
 }
 
 impl Train {
+    pub const MODEL_NAME: &'static str = "alpha-zero";
+
     pub const REPLAY_MEMORY_SIZE: usize = 5_000;
     pub const EPISODE_COUNT: usize = 100;
     pub const EVALUATE_COUNT: usize = 1600;
@@ -83,7 +87,7 @@ impl Train {
     pub const C_PUCT: f32 = 1.0;
     pub const V_LOSS: f32 = 1f32;
 
-    pub const TEST_EVALUATE_COUNT: usize = 300;
+    pub const TEST_EVALUATE_COUNT: usize = 1600;
 
     pub fn new() -> Result<Self, Status> {
         let agent = AgentModel::new(Scope::new_root_scope())?;
@@ -97,11 +101,16 @@ impl Train {
 
         session.run(&mut init_run_args)?;
 
-        Ok(Self {
+        let this = Self {
             session,
             agent,
             replay_memory: VecDeque::with_capacity(Self::REPLAY_MEMORY_SIZE),
-        })
+        };
+
+        // Load the parameters if it exists.
+        this.load(Self::MODEL_NAME);
+
+        Ok(this)
     }
 
     pub fn train(&mut self, iteration_count: usize) -> Result<(), Status> {
@@ -423,7 +432,7 @@ impl Train {
                 win, lose, draw
             );
 
-            self.save("alpha-zero");
+            self.save(Self::MODEL_NAME);
             println!("Model saved.");
         }
 
@@ -742,7 +751,7 @@ impl Train {
         }
     }
 
-    fn save(&self, name: impl AsRef<Path>) {
+    pub fn save(&self, name: impl AsRef<Path>) {
         let path = Path::new("saves").join(name);
 
         if path.exists() {
@@ -755,7 +764,17 @@ impl Train {
             }
         }
 
-        self.agent.save(&self.session, &path).unwrap();
+        self.agent.io.save(&self.session, &path).unwrap();
+    }
+
+    pub fn load(&self, name: impl AsRef<Path>) {
+        let path = Path::new("saves").join(name);
+
+        if !path.exists() {
+            return;
+        }
+
+        self.agent.io.load(&self.session, &path).unwrap();
     }
 }
 

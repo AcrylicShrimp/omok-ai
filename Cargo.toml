@@ -6,12 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+bincode = { version = "1" }
 environment = { path = "environment" }
 mcts = { path = "mcts" }
 network-utils = { path = "network-utils" }
 rand = { version = "0.8" }
 rayon = { version = "1.7" }
+serde = { version = "1", features = ["derive"] }
 tensorflow = { version = "0.20", features = ["tensorflow_gpu"] }
+thiserror = { version = "1" }
 
 [workspace]
 members = [

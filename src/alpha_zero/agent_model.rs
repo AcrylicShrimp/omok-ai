@@ -1,11 +1,9 @@
-use super::Network;
+use super::{ModelIO, Network};
 use environment::Environment;
-use std::path::Path;
 use tensorflow::{
     ops::{add, constant, mean, reshape, square, sub, Placeholder},
     train::{AdadeltaOptimizer, MinimizeOptions, Optimizer},
-    DataType, Operation, SaveModelError, SavedModelBuilder, SavedModelSaver, Scope, Session,
-    Status, Variable,
+    DataType, Operation, Scope, Status, Variable,
 };
 
 pub struct AgentModel {
@@ -20,7 +18,7 @@ pub struct AgentModel {
     pub op_loss: Operation,
     pub op_minimize: Operation,
     pub variables: Vec<Variable>,
-    pub saver: SavedModelSaver,
+    pub io: ModelIO,
 }
 
 impl AgentModel {
@@ -88,13 +86,7 @@ impl AgentModel {
         variables.extend(network.variables.clone());
         variables.extend(optimizer_vars.clone());
 
-        let mut saver_builder = SavedModelBuilder::new();
-        saver_builder
-            .add_collection("network_variables", &network.variables)
-            .add_collection("optimizer_variables", &optimizer_vars)
-            .add_tag("serve")
-            .add_tag("train");
-        let saver = saver_builder.inject(&mut scope)?;
+        let io = ModelIO::new(variables.clone(), &mut scope)?;
 
         Ok(Self {
             scope,
@@ -108,12 +100,8 @@ impl AgentModel {
             op_loss,
             op_minimize,
             variables,
-            saver,
+            io,
         })
-    }
-
-    pub fn save(&self, session: &Session, path: impl AsRef<Path>) -> Result<(), SaveModelError> {
-        self.saver.save(session, &self.scope.graph(), path)
     }
 }
 
