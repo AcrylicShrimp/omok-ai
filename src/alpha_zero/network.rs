@@ -1,4 +1,4 @@
-use crate::environment::Environment;
+use environment::Environment;
 use network_utils::{Conv2DPadding, WeightInitializer};
 use tensorflow::{
     ops::{
