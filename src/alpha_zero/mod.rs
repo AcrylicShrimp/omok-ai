@@ -98,7 +98,7 @@ impl Train {
 
         Ok(Self {
             session,
-            agent: AgentModel::new(Scope::new_root_scope())?,
+            agent,
             replay_memory: VecDeque::with_capacity(Self::REPLAY_MEMORY_SIZE),
         })
     }
