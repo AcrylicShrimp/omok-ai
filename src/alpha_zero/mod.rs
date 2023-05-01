@@ -759,7 +759,10 @@ impl Train {
     }
 }
 
-fn compute_ucb_1(parent_n: u64, node: &Node<BoardState>, c: f32) -> f32 {
+fn compute_ucb_1<S>(parent_n: u64, node: &Node<S>, c: f32) -> f32
+where
+    S: State,
+{
     let n = node.n.load(Ordering::Relaxed);
     let q_s_a = node.w.load(Ordering::Relaxed) as f32 / (n as f32 + f32::EPSILON);
     let p_s_a = node.p;
