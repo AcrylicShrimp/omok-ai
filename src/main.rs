@@ -1,5 +1,4 @@
 mod alpha_zero;
-mod environment;
 
 use alpha_zero::Train;
 use tensorflow::Status;
