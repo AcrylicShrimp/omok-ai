@@ -82,14 +82,14 @@ impl Train {
     pub const MODEL_NAME: &'static str = "alpha-zero";
 
     pub const REPLAY_MEMORY_SIZE: usize = 5_000;
-    pub const EPISODE_COUNT: usize = 100;
+    pub const EPISODE_COUNT: usize = 50;
     pub const EVALUATE_COUNT: usize = 1600;
-    pub const TRAINING_COUNT: usize = 100;
+    pub const TRAINING_COUNT: usize = 50;
     pub const BATCH_SIZE: usize = 32;
     pub const C_PUCT: f32 = 1.0;
     pub const V_LOSS: f32 = 1f32;
 
-    pub const TEST_EVALUATE_COUNT: usize = 1600;
+    pub const TEST_EVALUATE_COUNT: usize = 300;
 
     pub const TEMPERATURE: f32 = 1.0;
     pub const TEMPERATURE_THRESHOLD: usize = 30;
