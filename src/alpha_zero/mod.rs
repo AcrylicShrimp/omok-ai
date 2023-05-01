@@ -6,7 +6,10 @@ pub use network::*;
 
 use environment::{compute_state, Environment, GameStatus, Turn};
 use mcts::{Node, Policy, State, MCTS};
-use rand::{distributions::Uniform, seq::IteratorRandom, thread_rng, Rng};
+use rand::{
+    seq::{IteratorRandom, SliceRandom},
+    thread_rng, Rng,
+};
 use rayon::{
     prelude::{IntoParallelIterator, ParallelIterator},
     ThreadPool, ThreadPoolBuilder,
@@ -145,18 +148,29 @@ impl Train {
                                     return Ok(());
                                 }
 
+                                // Select any possible action.
                                 // Since the leaf node doesn't have terminal state, we need to expand it.
-                                // Select any possible action. It is safe to call unwrap() because
-                                // non-terminal state always has at least one possible action.
-                                let rng = thread_rng();
-                                let action = rng
-                                    .sample_iter(Uniform::new(
-                                        0,
-                                        Environment::BOARD_SIZE * Environment::BOARD_SIZE,
-                                    ))
+                                let mut rng = thread_rng();
+                                let action = {
+                                    let children = node.children.read();
+                                    let available_actions = (0..Environment::BOARD_SIZE
+                                        * Environment::BOARD_SIZE)
                                     .filter(|&action| node.state.is_available_action(action))
-                                    .next();
-                                let action = action.unwrap();
+                                        .filter(|&action| {
+                                            children
+                                                .iter()
+                                                .all(|child| child.action != Some(action))
+                                        })
+                                        .collect::<Vec<_>>();
+                                    available_actions.choose(&mut rng).cloned()
+                                };
+                                let action = if let Some(action) = action {
+                                    action
+                                } else {
+                                    // There's no action for now.
+                                    // Note that this not means the game is over.
+                                    return Ok(());
+                                };
 
                                 // Make board state for the action; first, copy the board state.
                                 let mut board_tensor = Tensor::new(&[
@@ -455,18 +469,27 @@ impl Train {
                             return Ok(());
                         }
 
+                        // Select any possible action.
                         // Since the leaf node doesn't have terminal state, we need to expand it.
-                        // Select any possible action. It is safe to call unwrap() because
-                        // non-terminal state always has at least one possible action.
-                        let rng = thread_rng();
-                        let action = rng
-                            .sample_iter(Uniform::new(
-                                0,
-                                Environment::BOARD_SIZE * Environment::BOARD_SIZE,
-                            ))
+                        let mut rng = thread_rng();
+                        let action = {
+                            let children = node.children.read();
+                            let available_actions = (0..Environment::BOARD_SIZE
+                                * Environment::BOARD_SIZE)
                             .filter(|&action| node.state.is_available_action(action))
-                            .next();
-                        let action = action.unwrap();
+                                .filter(|&action| {
+                                    children.iter().all(|child| child.action != Some(action))
+                                })
+                                .collect::<Vec<_>>();
+                            available_actions.choose(&mut rng).cloned()
+                        };
+                        let action = if let Some(action) = action {
+                            action
+                        } else {
+                            // There's no action for now.
+                            // Note that this not means the game is over.
+                            return Ok(());
+                        };
 
                         // Make board state for the action; first, copy the board state.
                         let mut board_tensor = Tensor::new(&[
