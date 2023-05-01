@@ -9,6 +9,8 @@ pub use network::*;
 use environment::{compute_state, Environment, GameStatus, Turn};
 use mcts::{Node, Policy, State, MCTS};
 use rand::{
+    distributions::WeightedIndex,
+    prelude::Distribution,
     seq::{IteratorRandom, SliceRandom},
     thread_rng, Rng,
 };
@@ -89,6 +91,9 @@ impl Train {
 
     pub const TEST_EVALUATE_COUNT: usize = 1600;
 
+    pub const TEMPERATURE: f32 = 1.0;
+    pub const TEMPERATURE_THRESHOLD: usize = 30;
+
     pub fn new() -> Result<Self, Status> {
         let agent = AgentModel::new(Scope::new_root_scope())?;
         let session = Session::new(&SessionOptions::new(), &agent.scope.graph())?;
@@ -134,6 +139,7 @@ impl Train {
                     };
                     MCTS::<BoardState>::new(state)
                 };
+                let mut turn_count = 0usize;
 
                 loop {
                     thread_pool.install(|| -> Result<(), Status> {
@@ -282,13 +288,33 @@ impl Train {
                     })?;
 
                     // Get the policy from the root node. Policy is the visit count of the children.
-                    let policy = {
+                    let mut policy = {
                         let root = mcts.root();
                         let children = root.children.read();
                         let mut policy = [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
 
                         for child in children.iter() {
                             policy[child.action.unwrap()] = child.n.load(Ordering::Relaxed) as f32;
+                        }
+
+                        policy
+                    };
+
+                    // Normalize the policy if the policy is not all zero.
+                    // This is necessary because the policy is the visit count of the children.
+                    let sum = policy.iter().sum::<f32>();
+                    if f32::EPSILON <= sum {
+                        for action in 0..Environment::BOARD_SIZE * Environment::BOARD_SIZE {
+                            policy[action] /= sum;
+                        }
+                    }
+
+                    let action = if turn_count < Self::TEMPERATURE_THRESHOLD {
+                        // Apply Boltzmann exploration.
+                        let inv_tau = Self::TEMPERATURE.recip();
+
+                        for index in 0..Environment::BOARD_SIZE * Environment::BOARD_SIZE {
+                            policy[index] = policy[index].powf(inv_tau);
                         }
 
                         // Re-normalize the policy if the policy is not all zero.
@@ -299,25 +325,34 @@ impl Train {
                             }
                         }
 
+                        // Sample an action from the policy.
+                        let dist = WeightedIndex::new(&policy).unwrap();
+                        dist.sample(&mut rng)
+                    } else {
+                        // Find best action.
                         policy
-                    };
-
-                    // Select the best action; it is the most visited child.
-                    let (children_index, best_action) = {
-                        let children = mcts.root().children.read();
-                        let (index, node) = children
                             .iter()
                             .enumerate()
-                            .max_by(|&(_, a), &(_, b)| {
-                                a.n.load(Ordering::Relaxed)
-                                    .cmp(&b.n.load(Ordering::Relaxed))
-                            })
+                            .max_by(|&(_, a), &(_, b)| f32::total_cmp(a, b))
+                            .unwrap()
+                            .0
+                    };
+
+                    turn_count += 1;
+
+                    let children_index = {
+                        // TODO: We must ensure that the action is in the children.
+                        let children = mcts.root().children.read();
+                        let (index, _) = children
+                            .iter()
+                            .enumerate()
+                            .find(|&(_, child)| child.action == Some(action))
                             .unwrap();
-                        (index, node.action.unwrap())
+                        index
                     };
 
                     // Play the action.
-                    let (z, is_terminal) = match env.place_stone(best_action) {
+                    let (z, is_terminal) = match env.place_stone(action) {
                         GameStatus::InProgress => (0f32, false),
                         GameStatus::Draw => (0f32, true),
                         GameStatus::BlackWin => {
