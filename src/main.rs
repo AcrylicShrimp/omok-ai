@@ -1,15 +1,11 @@
+mod alpha_zero;
 mod environment;
-mod model;
-mod train;
 
-use model::create_model;
+use alpha_zero::Train;
 use tensorflow::Status;
-use train::TrainSession;
 
 fn main() -> Result<(), Status> {
-    let mut train_session = TrainSession::new(create_model()?)?;
-    train_session.init()?;
-    train_session.warm_up();
-    train_session.perform_episodes(1000_0000)?;
+    let mut train = Train::new()?;
+    train.train(10_000)?;
     Ok(())
 }
