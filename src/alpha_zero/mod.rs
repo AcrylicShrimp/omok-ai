@@ -95,8 +95,9 @@ impl Train {
     pub const TEMPERATURE_THRESHOLD: usize = 30;
 
     pub fn new() -> Result<Self, Status> {
-        let agent = AgentModel::new(Scope::new_root_scope())?;
-        let session = Session::new(&SessionOptions::new(), &agent.scope.graph())?;
+        let mut scope = Scope::new_root_scope();
+        let agent = AgentModel::new(&mut scope)?;
+        let session = Session::new(&SessionOptions::new(), &scope.graph())?;
 
         let mut init_run_args = SessionRunArgs::new();
 
