@@ -18,7 +18,7 @@ pub struct Network {
 
 impl Network {
     pub const INPUT_SIZE: i64 = Environment::BOARD_SIZE as i64;
-    pub const INPUT_CHANNELS: i64 = 1;
+    pub const INPUT_CHANNELS: i64 = 2;
 
     pub const CONV0_FILTER_SIZE: i64 = 5;
     pub const CONV0_CHANNELS: i64 = 8;

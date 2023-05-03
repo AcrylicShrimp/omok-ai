@@ -1,4 +1,4 @@
-use crate::{bump_allocator::BumpAllocator, state::State, Policy};
+use crate::{bump_allocator::BumpAllocator, state::State, PolicyRef};
 use atomic_float::AtomicF32;
 use parking_lot::RwLock;
 use std::{
@@ -38,6 +38,26 @@ where
         }
     }
 
+    pub fn with_values(
+        parent: Option<NodePtr<S>>,
+        action: Option<usize>,
+        p: f32,
+        w: f32,
+        n: u64,
+        state: S,
+    ) -> Self {
+        Self {
+            parent,
+            action,
+            children: RwLock::new(Vec::with_capacity(32)),
+            p,
+            w: AtomicF32::new(w),
+            n: AtomicU64::new(n),
+            v_loss: AtomicU32::new(0),
+            state,
+        }
+    }
+
     pub fn select_leaf(&self, selector: impl Fn(&Self, &[NodePtr<S>]) -> usize) -> &Self {
         let mut node = self;
         let mut children = self.children.read();
@@ -65,6 +85,8 @@ where
     pub fn expand<'p, 'c>(
         &'p self,
         action: usize,
+        w: f32,
+        n: u64,
         state: S,
         allocator: &mut BumpAllocator<Self>,
     ) -> Option<&'c Self> {
@@ -74,10 +96,12 @@ where
             return None;
         }
 
-        let child = allocator.allocate(Self::new(
+        let child = allocator.allocate(Self::with_values(
             Some(NodePtr::new(self)),
             Some(action),
             self.state.policy().get(action),
+            w,
+            n,
             state,
         ));
 
