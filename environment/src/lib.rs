@@ -81,20 +81,20 @@ impl Environment {
         let dst = dst.as_mut();
         let black_offset = match turn {
             Turn::Black => 0,
-            Turn::White => Self::BOARD_SIZE * Self::BOARD_SIZE,
+            Turn::White => 1,
         };
         let white_offset = match turn {
-            Turn::Black => Self::BOARD_SIZE * Self::BOARD_SIZE,
+            Turn::Black => 1,
             Turn::White => 0,
         };
 
-        for (index, stone) in self.board.iter().enumerate() {
-            let base_index = match stone {
+        for (index, &stone) in self.board.iter().enumerate() {
+            let offset = match stone {
                 Stone::Empty => continue,
                 Stone::Black => black_offset,
                 Stone::White => white_offset,
             };
-            dst[base_index + index] = 1f32;
+            dst[index * 2 + offset] = 1f32;
         }
     }
 
