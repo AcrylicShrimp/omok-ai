@@ -24,6 +24,7 @@ use rayon::{
 use std::{
     collections::VecDeque,
     fs::{create_dir_all, remove_dir_all, remove_file},
+    io::Write,
     path::Path,
     sync::atomic::Ordering,
 };
@@ -137,8 +138,18 @@ impl Train {
         let mut rng = thread_rng();
         let mut recent_losses = VecDeque::with_capacity(100);
 
-        for _ in 0..iteration_count {
-            for _ in 0..Self::EPISODE_COUNT {
+        for iteration in 0..iteration_count {
+            println!("[iter={}] Entering self-play phase.", iteration + 1);
+
+            for episode in 0..Self::EPISODE_COUNT {
+                print!(
+                    "\r[iter={}] Self-playing... [episode={}/{}]",
+                    iteration + 1,
+                    episode + 1,
+                    Self::EPISODE_COUNT
+                );
+                std::io::stdout().flush().unwrap();
+
                 let mut env = Environment::new();
                 let mut mcts = {
                     let state = BoardState {
@@ -400,7 +411,8 @@ impl Train {
                 }
             }
 
-            println!("Self-play finished; training the agent...");
+            println!();
+            println!("[iter={}] Entering training phase.", iteration + 1);
 
             for _ in 0..Self::TRAINING_COUNT {
                 let transition = self
@@ -469,32 +481,52 @@ impl Train {
             }
 
             println!(
-                "Loss: {}",
+                "[iter={}] Loss: {}",
+                iteration + 1,
                 recent_losses.iter().sum::<f32>() / recent_losses.len() as f32
             );
 
-            let mut win = 0;
-            let mut lose = 0;
-            let mut draw = 0;
-
-            for _ in 0..100 {
-                let result = self.play_against_random_player(&thread_pool)?;
-                if result == 1 {
-                    win += 1;
-                } else if result == -1 {
-                    lose += 1;
-                } else {
-                    draw += 1;
-                }
-            }
-
-            println!(
-                "[Playing against random move player] Win: {}, Lose: {}, Draw: {}",
-                win, lose, draw
-            );
-
             self.save(Self::MODEL_NAME);
-            println!("Model saved.");
+            println!("[iter={}] Model saved.", iteration + 1);
+
+            if iteration % 10 == 0 {
+                println!(
+                    "[iter={}] Playing against random move player.",
+                    iteration + 1
+                );
+
+                let mut win = 0;
+                let mut lose = 0;
+                let mut draw = 0;
+
+                for game in 0..100 {
+                    print!(
+                        "\r[iter={}] Playing... [game={}/{}]",
+                        iteration + 1,
+                        game + 1,
+                        100
+                    );
+                    std::io::stdout().flush().unwrap();
+
+                    let result = self.play_against_random_player(&thread_pool)?;
+                    if result == 1 {
+                        win += 1;
+                    } else if result == -1 {
+                        lose += 1;
+                    } else {
+                        draw += 1;
+                    }
+                }
+
+                println!();
+                println!(
+                    "[iter={}] Win: {}, Lose: {}, Draw: {}",
+                    iteration + 1,
+                    win,
+                    lose,
+                    draw
+                );
+            }
         }
 
         Ok(())
