@@ -1,6 +1,7 @@
 use tensorflow::{
     ops::{
-        bias_add, broadcast_to, constant, mat_mul, mul, Conv2D as TFConv2D, RandomStandardNormal,
+        bias_add, broadcast_to, constant, mat_mul, mul, Conv2D as TFConv2D, MaxPool,
+        RandomStandardNormal,
     },
     DataType, Operation, Scope, Status, Variable,
 };
@@ -14,6 +15,12 @@ pub struct Conv2D {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Conv2DPadding {
+    Valid,
+    Same,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum PoolPadding {
     Valid,
     Same,
 }
@@ -121,6 +128,27 @@ pub fn conv2d(
         b,
         output: conv_biased,
     })
+}
+
+pub fn max_pool(
+    name: impl AsRef<str>,
+    x: Operation,
+    filter_size: &[i64; 2],
+    stride: &[i64; 2],
+    padding: PoolPadding,
+    scope: &mut Scope,
+) -> Result<Operation, Status> {
+    let name = name.as_ref();
+    let pool = MaxPool::new()
+        .data_format("NHWC")
+        .ksize([1, filter_size[1], filter_size[0], 1])
+        .strides([1, stride[1], stride[0], 1])
+        .padding(match padding {
+            PoolPadding::Valid => "VALID",
+            PoolPadding::Same => "SAME",
+        })
+        .build(x, &mut scope.with_op_name(&format!("{}_max_pool", name)))?;
+    Ok(pool)
 }
 
 pub fn fc(
