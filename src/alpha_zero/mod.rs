@@ -102,7 +102,7 @@ impl Train {
     pub const C_PUCT: f32 = 1.0;
     pub const V_LOSS: f32 = 0.5f32;
 
-    pub const TEST_EVALUATE_COUNT: usize = 1000;
+    pub const TEST_EVALUATE_COUNT: usize = 300;
 
     pub const TEMPERATURE: f32 = 1.0;
     pub const TEMPERATURE_THRESHOLD: usize = 30;
