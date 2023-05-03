@@ -139,6 +139,7 @@ impl Train {
         let mut recent_losses = VecDeque::with_capacity(100);
 
         for iteration in 0..iteration_count {
+            println!("========================================");
             println!("[iter={}] Entering self-play phase.", iteration + 1);
 
             for episode in 0..Self::EPISODE_COUNT {
