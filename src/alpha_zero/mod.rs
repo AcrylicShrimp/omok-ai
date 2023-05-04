@@ -385,12 +385,22 @@ impl Train {
                     let (z, is_terminal) = match env.place_stone(action).unwrap() {
                         GameStatus::InProgress => (0f32, false),
                         GameStatus::Draw => (0f32, true),
-                        GameStatus::BlackWin => {
-                            (if env.turn == Turn::Black { 1f32 } else { -1f32 }, true)
-                        }
-                        GameStatus::WhiteWin => {
-                            (if env.turn == Turn::White { 1f32 } else { -1f32 }, true)
-                        }
+                        GameStatus::BlackWin => (
+                            if env_before_action.turn == Turn::Black {
+                                1f32
+                            } else {
+                                -1f32
+                            },
+                            true,
+                        ),
+                        GameStatus::WhiteWin => (
+                            if env_before_action.turn == Turn::White {
+                                1f32
+                            } else {
+                                -1f32
+                            },
+                            true,
+                        ),
                     };
 
                     if self.replay_memory.len() == Self::REPLAY_MEMORY_SIZE {
