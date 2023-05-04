@@ -56,7 +56,7 @@ impl MCTSExecutor {
                             // Instead we perform backup from the leaf node.
                             node.propagate(node.state.z.load(Ordering::Relaxed));
                             node.v_loss.fetch_sub(1, Ordering::Relaxed);
-                            return Ok(());
+                            continue;
                         }
 
                         // Select any possible action.
@@ -86,7 +86,7 @@ impl MCTSExecutor {
                             // There's no action for now.
                             // Note that this not means the game is over.
                             node.v_loss.fetch_sub(1, Ordering::Relaxed);
-                            return Ok(());
+                            continue;
                         };
 
                         // Place the stone.
@@ -114,7 +114,7 @@ impl MCTSExecutor {
                                 // The node is already expanded by other thread.
                                 // We don't need to expand it again.
                                 node.v_loss.fetch_sub(1, Ordering::Relaxed);
-                                return Ok(());
+                                continue;
                             }
                         };
 
