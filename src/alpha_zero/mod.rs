@@ -44,11 +44,11 @@ impl Train {
 
     pub const REPLAY_MEMORY_SIZE: usize = 5_000;
     pub const EPISODE_COUNT: usize = 50;
-    pub const EVALUATE_COUNT: usize = 1600;
+    pub const EVALUATE_COUNT: usize = 1600 / MCTSExecutor::NN_EVALUATION_BATCH_SIZE;
     pub const TRAINING_COUNT: usize = 100;
     pub const BATCH_SIZE: usize = 64;
 
-    pub const TEST_EVALUATE_COUNT: usize = 300;
+    pub const TEST_EVALUATE_COUNT: usize = 320 / MCTSExecutor::NN_EVALUATION_BATCH_SIZE;
 
     pub const TEMPERATURE: f32 = 1.0;
     pub const TEMPERATURE_THRESHOLD: usize = 30;
