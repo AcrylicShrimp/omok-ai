@@ -475,8 +475,6 @@ impl Train {
                 match mcts_executor.mcts.expand(
                     mcts_executor.mcts.root(),
                     random_move,
-                    0f32,
-                    0,
                     BoardState {
                         env: env.clone(),
                         status: GameStatus::InProgress,

@@ -38,15 +38,8 @@ where
         root.select_leaf(selector)
     }
 
-    pub fn expand(
-        &self,
-        node: &Node<S>,
-        action: usize,
-        w: f32,
-        n: u64,
-        state: S,
-    ) -> Option<NodePtr<S>> {
-        node.expand(action, w, n, state, &mut self.allocator.lock())
+    pub fn expand(&self, node: &Node<S>, action: usize, state: S) -> Option<NodePtr<S>> {
+        node.expand(action, state, &mut self.allocator.lock())
     }
 
     pub fn transition(&mut self, children_index: usize) {

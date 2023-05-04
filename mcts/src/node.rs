@@ -14,7 +14,7 @@ where
     pub parent: Option<NodePtr<S>>,
     pub action: Option<usize>,
     pub children: RwLock<Vec<NodePtr<S>>>,
-    pub p: f32,
+    pub p: AtomicF32,
     pub w: AtomicF32,
     pub n: AtomicU64,
     pub v_loss: AtomicU32,
@@ -30,29 +30,9 @@ where
             parent,
             action,
             children: RwLock::new(Vec::with_capacity(32)),
-            p,
+            p: AtomicF32::new(p),
             w: AtomicF32::new(0.0),
             n: AtomicU64::new(0),
-            v_loss: AtomicU32::new(0),
-            state,
-        }
-    }
-
-    pub fn with_values(
-        parent: Option<NodePtr<S>>,
-        action: Option<usize>,
-        p: f32,
-        w: f32,
-        n: u64,
-        state: S,
-    ) -> Self {
-        Self {
-            parent,
-            action,
-            children: RwLock::new(Vec::with_capacity(32)),
-            p,
-            w: AtomicF32::new(w),
-            n: AtomicU64::new(n),
             v_loss: AtomicU32::new(0),
             state,
         }
@@ -87,8 +67,6 @@ where
     pub fn expand(
         &self,
         action: usize,
-        w: f32,
-        n: u64,
         state: S,
         allocator: &mut BumpAllocator<Self>,
     ) -> Option<NodePtr<S>> {
@@ -98,15 +76,12 @@ where
             return None;
         }
 
-        let child = allocator.allocate(Self::with_values(
+        let child = NodePtr::new(allocator.allocate(Self::new(
             Some(NodePtr::new(self)),
             Some(action),
             self.state.policy().get(action),
-            w,
-            n,
             state,
-        ));
-        let child = NodePtr::new(child);
+        )));
         children.push(child.clone());
         Some(child)
     }

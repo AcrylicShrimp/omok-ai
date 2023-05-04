@@ -17,7 +17,7 @@ pub struct MCTSExecutor {
 }
 
 impl MCTSExecutor {
-    pub const NN_EVALUATION_BATCH_SIZE: usize = 32;
+    pub const NN_EVALUATION_BATCH_SIZE: usize = 64;
 
     pub const C_PUCT: f32 = 1.0;
     pub const V_LOSS: f32 = 0.5f32;
@@ -85,6 +85,7 @@ impl MCTSExecutor {
                         } else {
                             // There's no action for now.
                             // Note that this not means the game is over.
+                            node.v_loss.fetch_sub(1, Ordering::Relaxed);
                             return Ok(());
                         };
 
@@ -96,8 +97,6 @@ impl MCTSExecutor {
                         let expanded_child = match self.mcts.expand(
                             node,
                             action,
-                            f32::MIN,
-                            u64::MAX - 1,
                             BoardState {
                                 env,
                                 status,
@@ -186,9 +185,14 @@ impl MCTSExecutor {
                         node.state.policy.write().copy_from_slice(p);
                         node.state.z.store(reward, Ordering::Relaxed);
 
-                        // Reset the node.
-                        node.n.store(0, Ordering::Relaxed);
-                        node.w.store(0f32, Ordering::Relaxed);
+                        // Update children's prior probability.
+                        // This is required because every node after expanded are holding dummy prior probabilities.
+                        for child in node.children.read().iter() {
+                            let child = &*child;
+                            let action = child.action.unwrap();
+                            let p = p[action];
+                            child.p.store(p, Ordering::Relaxed);
+                        }
 
                         // Perform backup from the expanded child node.
                         node.propagate(reward);
@@ -211,7 +215,7 @@ where
 {
     let n = node.n.load(Ordering::Relaxed);
     let q_s_a = node.w.load(Ordering::Relaxed) as f32 / (n as f32 + f32::EPSILON);
-    let p_s_a = node.p;
+    let p_s_a = node.p.load(Ordering::Relaxed);
     let bias = f32::sqrt(parent_n as f32) / (1 + n) as f32;
     q_s_a + c * p_s_a * bias - node.v_loss.load(Ordering::Relaxed) as f32 * MCTSExecutor::V_LOSS
 }
