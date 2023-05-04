@@ -79,6 +79,8 @@ impl Environment {
 
     pub fn encode_board(&self, turn: Turn, mut dst: impl AsMut<[f32]>) {
         let dst = dst.as_mut();
+        dst.fill(0f32);
+
         let black_offset = match turn {
             Turn::Black => 0,
             Turn::White => 1,
