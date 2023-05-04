@@ -21,7 +21,7 @@ pub struct AgentModel {
 }
 
 impl AgentModel {
-    pub const LEARNING_RATE: f32 = 0.001;
+    pub const LEARNING_RATE: f32 = 0.01;
 
     pub fn new(scope: &mut Scope) -> Result<Self, Status> {
         let op_pi_input = Placeholder::new()

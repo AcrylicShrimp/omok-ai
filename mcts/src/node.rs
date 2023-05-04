@@ -63,6 +63,8 @@ where
         let mut children = self.children.read();
 
         loop {
+            node.v_loss.fetch_add(1, Ordering::Relaxed);
+
             // If we have not reached the max number of children, return this node, since it is a leaf.
             if children.len() != node.state.available_actions_len() {
                 return node;
@@ -72,8 +74,8 @@ where
                 return node;
             }
 
-            node.v_loss.fetch_add(1, Ordering::Relaxed);
             let index = selector(node, &children);
+
             node.v_loss.fetch_sub(1, Ordering::Relaxed);
 
             node = unsafe { &*children[index].ptr };
@@ -82,14 +84,14 @@ where
         }
     }
 
-    pub fn expand<'p, 'c>(
-        &'p self,
+    pub fn expand(
+        &self,
         action: usize,
         w: f32,
         n: u64,
         state: S,
         allocator: &mut BumpAllocator<Self>,
-    ) -> Option<&'c Self> {
+    ) -> Option<NodePtr<S>> {
         let mut children = self.children.write();
 
         if children.iter().any(|child| child.action == Some(action)) {
@@ -104,9 +106,9 @@ where
             n,
             state,
         ));
-
-        children.push(NodePtr::new(child));
-        Some(unsafe { &*child })
+        let child = NodePtr::new(child);
+        children.push(child.clone());
+        Some(child)
     }
 
     pub fn propagate(&self, mut w: f32) {
@@ -128,7 +130,7 @@ where
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NodePtr<S>
 where
     S: State,
@@ -144,6 +146,17 @@ where
         Self { ptr }
     }
 }
+
+impl<S> Clone for NodePtr<S>
+where
+    S: State,
+{
+    fn clone(&self) -> Self {
+        Self { ptr: self.ptr }
+    }
+}
+
+impl<S> Copy for NodePtr<S> where S: State {}
 
 impl<S> Deref for NodePtr<S>
 where
