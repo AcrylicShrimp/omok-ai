@@ -17,10 +17,10 @@ pub struct MCTSExecutor {
 }
 
 impl MCTSExecutor {
-    pub const NN_EVALUATION_BATCH_SIZE: usize = 64;
+    pub const NN_EVALUATION_BATCH_SIZE: usize = 128;
 
     pub const C_PUCT: f32 = 1.0;
-    pub const V_LOSS: f32 = 0.5f32;
+    pub const V_LOSS: f32 = 0.5;
 
     pub fn new(mcts: MCTS<BoardState>) -> Self {
         Self { mcts }

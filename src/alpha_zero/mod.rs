@@ -41,10 +41,12 @@ pub struct Train {
 
 macro_rules! batched {
     ($expr:expr) => {
-        if MCTSExecutor::NN_EVALUATION_BATCH_SIZE < $expr {
+        if $expr / MCTSExecutor::NN_EVALUATION_BATCH_SIZE * MCTSExecutor::NN_EVALUATION_BATCH_SIZE
+            == $expr
+        {
             $expr / MCTSExecutor::NN_EVALUATION_BATCH_SIZE
         } else {
-            1
+            $expr / MCTSExecutor::NN_EVALUATION_BATCH_SIZE + 1
         }
     };
 }
@@ -58,7 +60,7 @@ impl Train {
     pub const TRAINING_COUNT: usize = 100;
     pub const BATCH_SIZE: usize = 64;
 
-    pub const TEST_EVALUATE_COUNT: usize = batched!(320);
+    pub const TEST_EVALUATE_COUNT: usize = batched!(1600);
 
     pub const TEMPERATURE: f32 = 1.0;
     pub const TEMPERATURE_THRESHOLD: usize = 30;
