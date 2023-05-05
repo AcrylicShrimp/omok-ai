@@ -3,53 +3,53 @@
     windows_subsystem = "windows"
 )]
 
+mod agent;
+
+use agent::Agent;
+use environment::{Environment, GameStatus, Stone, Turn};
 use std::sync::Mutex;
-use tauri::Manager;
-
-use crate::environment::*;
-use crate::model::*;
-
-mod environment;
-mod model;
 
 struct Application {
     env: Environment,
     env_status: GameStatus,
-    model: Model,
+    agent: Agent,
 }
 
 impl Application {
     pub fn new() -> Self {
         let mut env = Environment::new();
-        let mut model = Model::load();
+        let mut agent = Agent::new(env.clone());
 
-        let action = model.make_move(&env);
+        let action = agent.make_move();
         env.place_stone(action);
+        agent.sync_move(&env, action);
 
         Self {
             env,
             env_status: GameStatus::InProgress,
-            model,
+            agent,
         }
     }
 
     fn on_click_button(&mut self, x: usize, y: usize) -> &mut Self {
         match self.env_status {
             GameStatus::InProgress => {
-                let index = y * Environment::BOARD_SIZE + x;
-
-                if self.env.turn != Turn::White || !self.env.legal_moves[index] {
+                if self.env.turn != Turn::White {
                     return self;
                 }
 
+                let index = y * Environment::BOARD_SIZE + x;
                 self.place_stone(index);
             }
             _ => {
                 // Reset game
                 self.env = Environment::new();
+                self.agent = Agent::new(self.env.clone());
 
-                let action = self.model.make_move(&self.env);
+                let action = self.agent.make_move();
+
                 self.env.place_stone(action);
+                self.agent.sync_move(&self.env, action);
                 self.env_status = GameStatus::InProgress;
             }
         }
@@ -58,14 +58,18 @@ impl Application {
     }
 
     fn place_stone(&mut self, index: usize) {
-        self.env_status = self.env.place_stone(index);
+        self.env_status = match self.env.place_stone(index) {
+            Some(status) => status,
+            None => return,
+        };
 
         if self.env_status != GameStatus::InProgress {
             return;
         }
 
-        let action = self.model.make_move(&self.env);
-        self.env_status = self.env.place_stone(action);
+        let action = self.agent.make_move();
+        self.env_status = self.env.place_stone(action).unwrap();
+        self.agent.sync_move(&self.env, action);
     }
 }
 
@@ -91,7 +95,16 @@ fn on_click(state: tauri::State<Mutex<Application>>, x: usize, y: usize) -> Clic
     state.on_click_button(x, y);
 
     ClickResponse {
-        board: state.env.board.into(),
+        board: state
+            .env
+            .board
+            .iter()
+            .map(|&stone| match stone {
+                Stone::Empty => 0,
+                Stone::Black => 1,
+                Stone::White => -1,
+            })
+            .collect(),
         game_status: state.env_status,
     }
 }

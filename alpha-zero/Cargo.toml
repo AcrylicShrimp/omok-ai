@@ -1,30 +1,20 @@
 [package]
-name = "omok-ai"
+name = "alpha-zero"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-alpha-zero = { path = "alpha-zero" }
 atomic_float = { version = "0.1" }
 bincode = { version = "1" }
 bitvec = { version = "1" }
-environment = { path = "environment" }
-mcts = { path = "mcts" }
-network-utils = { path = "network-utils" }
+environment = { path = "../environment" }
+mcts = { path = "../mcts" }
+network-utils = { path = "../network-utils" }
 parking_lot = { version = "0.12", features = ["hardware-lock-elision"] }
 rand = { version = "0.8" }
 rayon = { version = "1.7" }
 serde = { version = "1", features = ["derive"] }
-tensorflow = { version = "0.20", features = ["tensorflow_gpu"] }
+tensorflow = { version = "0.20", features = [] }
 thiserror = { version = "1" }
-
-[workspace]
-members = [
-    "alpha-zero",
-    "environment",
-    "gui",
-    "mcts",
-    "network-utils"
-]

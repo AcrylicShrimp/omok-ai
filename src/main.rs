@@ -1,10 +1,10 @@
-mod alpha_zero;
+mod trainer;
 
-use alpha_zero::Train;
 use tensorflow::Status;
+use trainer::Trainer;
 
 fn main() -> Result<(), Status> {
-    let mut train = Train::new()?;
+    let mut train = Trainer::new()?;
     train.train(10_000)?;
     Ok(())
 }

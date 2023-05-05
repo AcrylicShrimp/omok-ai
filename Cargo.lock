@@ -54,6 +54,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "alpha-zero"
+version = "0.1.0"
+dependencies = [
+ "atomic_float",
+ "bincode",
+ "bitvec",
+ "environment",
+ "mcts",
+ "network-utils",
+ "parking_lot",
+ "rand 0.8.5",
+ "rayon",
+ "serde",
+ "tensorflow",
+ "thiserror",
+]
+
+[[package]]
 name = "anyhow"
 version = "1.0.71"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -708,6 +726,9 @@ dependencies = [
 [[package]]
 name = "environment"
 version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "errno"
@@ -1179,6 +1200,13 @@ dependencies = [
 name = "gui"
 version = "0.1.0"
 dependencies = [
+ "alpha-zero",
+ "atomic_float",
+ "environment",
+ "mcts",
+ "parking_lot",
+ "rand 0.8.5",
+ "rayon",
  "serde",
  "serde_json",
  "tauri",
@@ -1764,6 +1792,7 @@ dependencies = [
 name = "omok-ai"
 version = "0.1.0"
 dependencies = [
+ "alpha-zero",
  "atomic_float",
  "bincode",
  "bitvec",
@@ -2403,18 +2432,18 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.160"
+version = "1.0.162"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb2f3770c8bce3bcda7e149193a069a0f4365bda1fa5cd88e03bca26afc1216c"
+checksum = "71b2f6e1ab5c2b98c05f0f35b236b22e8df7ead6ffbf51d7808da7f8817e7ab6"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.160"
+version = "1.0.162"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "291a097c63d8497e00160b166a967a4a79c64f3facdd01cbd7502231688d77df"
+checksum = "a2a0814352fd64b58489904a44ea8d90cb1a91dcb6b4f5ebabc32c8318e93cb6"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -1,15 +1,4 @@
-mod agent_model;
-mod mcts_executor;
-mod mcts_node;
-mod model_io;
-mod network;
-
-pub use agent_model::*;
-pub use mcts_executor::*;
-pub use mcts_node::*;
-pub use model_io::*;
-pub use network::*;
-
+use alpha_zero::{AgentModel, BoardState, MCTSExecutor};
 use atomic_float::AtomicF32;
 use environment::{Environment, GameStatus, Stone, Turn};
 use mcts::{State, MCTS};
@@ -33,7 +22,7 @@ pub struct Transition {
     pub z: f32,
 }
 
-pub struct Train {
+pub struct Trainer {
     pub session: Session,
     pub agent: AgentModel,
     pub replay_memory: VecDeque<Transition>,
@@ -51,7 +40,7 @@ macro_rules! batched {
     };
 }
 
-impl Train {
+impl Trainer {
     pub const MODEL_NAME: &'static str = "alpha-zero";
 
     pub const REPLAY_MEMORY_SIZE: usize = 5_000;
@@ -438,7 +427,10 @@ impl Train {
                     Environment::BOARD_SIZE as u64,
                     2,
                 ]);
-                env.encode_board(env.turn, &mut board_tensor[..]);
+                mcts_executor.mcts.root().state.env.encode_board(
+                    mcts_executor.mcts.root().state.env.turn,
+                    &mut board_tensor[..],
+                );
 
                 // Evaluate the NN with the child state to get the policy and value.
                 let mut eval_run_args = SessionRunArgs::new();
