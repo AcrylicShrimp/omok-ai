@@ -225,6 +225,16 @@ impl Trainer {
                     // The game is continued. Re-root the tree.
                     mcts_executor.mcts.transition(children_index);
                 }
+
+                // Update z in the game history, so that the agent can learn from it.
+                let len = self.replay_memory.len();
+                let mut z = self.replay_memory.back().unwrap().z;
+
+                for index in 0..turn_count {
+                    let transition = &mut self.replay_memory[len - index - 1];
+                    transition.z = z;
+                    z = -z;
+                }
             }
 
             println!();
