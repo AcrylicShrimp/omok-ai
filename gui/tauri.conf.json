@@ -55,10 +55,10 @@
     "windows": [
       {
         "fullscreen": false,
-        "height": 1280,
+        "height": 800,
         "resizable": false,
         "title": "Omok",
-        "width": 1280
+        "width": 800
       }
     ]
   }
