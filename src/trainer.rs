@@ -43,7 +43,7 @@ macro_rules! batched {
 impl Trainer {
     pub const MODEL_NAME: &'static str = "alpha-zero";
 
-    pub const REPLAY_MEMORY_SIZE: usize = 5_000;
+    pub const REPLAY_MEMORY_SIZE: usize = 50_000;
     pub const EPISODE_COUNT: usize = 50;
     pub const EVALUATE_COUNT: usize = batched!(1600);
     pub const TRAINING_COUNT: usize = 100;
