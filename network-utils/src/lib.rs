@@ -1,7 +1,7 @@
 use tensorflow::{
     ops::{
-        bias_add, broadcast_to, constant, mat_mul, mul, Conv2D as TFConv2D, MaxPool,
-        RandomStandardNormal,
+        add, bias_add, broadcast_to, constant, leaky_relu, mat_mul, mul, Conv2D as TFConv2D,
+        DepthwiseConv2dNative as TFDepthwiseConv2dNative, MaxPool, RandomStandardNormal,
     },
     DataType, Operation, Scope, Status, Variable,
 };
@@ -9,6 +9,14 @@ use tensorflow::{
 #[derive(Debug, Clone)]
 pub struct Conv2D {
     pub w: Variable,
+    pub b: Variable,
+    pub output: Operation,
+}
+
+#[derive(Debug, Clone)]
+pub struct SeparableConv2D {
+    pub depthwise_w: Variable,
+    pub pointwise_w: Variable,
     pub b: Variable,
     pub output: Operation,
 }
@@ -29,6 +37,27 @@ pub enum PoolPadding {
 pub struct Fc {
     pub w: Variable,
     pub b: Variable,
+    pub output: Operation,
+}
+
+#[derive(Debug, Clone)]
+pub struct Conv2DResidual {
+    pub w0: Variable,
+    pub b0: Variable,
+    pub w1: Variable,
+    pub b1: Variable,
+    pub output: Operation,
+}
+
+#[derive(Debug, Clone)]
+pub struct Conv2DBottleneckResidual {
+    pub w0: Variable,
+    pub b0: Variable,
+    pub depthwise_w1: Variable,
+    pub pointwise_w1: Variable,
+    pub b1: Variable,
+    pub w2: Variable,
+    pub b2: Variable,
     pub output: Operation,
 }
 
@@ -130,6 +159,98 @@ pub fn conv2d(
     })
 }
 
+pub fn separable_conv2d(
+    name: impl AsRef<str>,
+    data_type: DataType,
+    x: Operation,
+    input_channels: i64,
+    output_channels: i64,
+    filter_size: &[i64; 2],
+    stride: &[i64; 2],
+    padding: Conv2DPadding,
+    weight_init: WeightInitializer,
+    scope: &mut Scope,
+) -> Result<SeparableConv2D, Status> {
+    let name = name.as_ref();
+
+    let depthwise_w = Variable::builder()
+        .data_type(data_type)
+        .shape(&[filter_size[1], filter_size[0], input_channels, 1])
+        .initial_value(mul(
+            RandomStandardNormal::new().dtype(data_type).build(
+                constant(&[filter_size[1], filter_size[0], input_channels, 1], scope)?,
+                scope,
+            )?,
+            constant(
+                weight_init.build_constant(
+                    filter_size[1] * filter_size[0] * input_channels,
+                    filter_size[1] * filter_size[0] * 1,
+                ),
+                scope,
+            )?,
+            scope,
+        )?)
+        .build(&mut scope.with_op_name(&format!("{}_w", name)))?;
+    let depthwise_conv = TFDepthwiseConv2dNative::new()
+        .data_format("NHWC")
+        .strides([1, stride[1], stride[0], 1])
+        .padding(match padding {
+            Conv2DPadding::Valid => "VALID",
+            Conv2DPadding::Same => "SAME",
+        })
+        .build(
+            x,
+            depthwise_w.output().clone(),
+            &mut scope.with_op_name(&format!("{}_depthwise_conv2d", name)),
+        )?;
+
+    let pointwise_w = Variable::builder()
+        .data_type(data_type)
+        .shape(&[1, 1, input_channels, output_channels])
+        .initial_value(mul(
+            RandomStandardNormal::new().dtype(data_type).build(
+                constant(&[1, 1, input_channels, output_channels], scope)?,
+                scope,
+            )?,
+            constant(
+                weight_init.build_constant(1 * 1 * input_channels, 1 * 1 * output_channels),
+                scope,
+            )?,
+            scope,
+        )?)
+        .build(&mut scope.with_op_name(&format!("{}_w", name)))?;
+    let pointwise_conv = TFConv2D::new()
+        .data_format("NHWC")
+        .strides([1, 1, 1, 1])
+        .padding("SAME")
+        .build(
+            depthwise_conv,
+            pointwise_w.output().clone(),
+            &mut scope.with_op_name(&format!("{}_pointwise_conv2d", name)),
+        )?;
+
+    let b = Variable::builder()
+        .data_type(data_type)
+        .shape(&[output_channels])
+        .initial_value(broadcast_to(
+            constant(&[0f32], scope)?,
+            constant(&[output_channels], scope)?,
+            scope,
+        )?)
+        .build(&mut scope.with_op_name(&format!("{}_b", name)))?;
+    let conv_biased = bias_add(
+        pointwise_conv,
+        b.output().clone(),
+        &mut scope.with_op_name(&format!("{}_bias_add", name)),
+    )?;
+    Ok(SeparableConv2D {
+        depthwise_w,
+        pointwise_w,
+        b,
+        output: conv_biased,
+    })
+}
+
 pub fn max_pool(
     name: impl AsRef<str>,
     x: Operation,
@@ -195,5 +316,136 @@ pub fn fc(
         w,
         b,
         output: mm_biased,
+    })
+}
+
+pub fn conv2d_residual(
+    name: impl AsRef<str>,
+    data_type: DataType,
+    x: Operation,
+    input_channels: i64,
+    output_channels: i64,
+    filter_size: &[i64; 2],
+    stride: &[i64; 2],
+    padding: Conv2DPadding,
+    weight_init: WeightInitializer,
+    scope: &mut Scope,
+) -> Result<Conv2DResidual, Status> {
+    let conv0 = conv2d(
+        &format!("{}_conv0", name.as_ref()),
+        data_type,
+        x.clone(),
+        input_channels,
+        output_channels,
+        filter_size,
+        stride,
+        Conv2DPadding::Same,
+        WeightInitializer::He,
+        scope,
+    )?;
+    let relu = leaky_relu(
+        conv0.output,
+        &mut scope.with_op_name(&format!("{}_relu", name.as_ref())),
+    )?;
+    let conv1 = conv2d(
+        &format!("{}_conv1", name.as_ref()),
+        data_type,
+        relu,
+        output_channels,
+        output_channels,
+        filter_size,
+        stride,
+        padding,
+        weight_init,
+        scope,
+    )?;
+    let add = add(
+        conv1.output,
+        x,
+        &mut scope.with_op_name(&format!("{}_add", name.as_ref())),
+    )?;
+    Ok(Conv2DResidual {
+        w0: conv0.w,
+        b0: conv0.b,
+        w1: conv1.w,
+        b1: conv1.b,
+        output: add,
+    })
+}
+
+pub fn conv2d_bottleneck_residual(
+    name: impl AsRef<str>,
+    data_type: DataType,
+    x: Operation,
+    channels: i64,
+    middle_channels: i64,
+    filter_size: &[i64; 2],
+    stride: &[i64; 2],
+    padding: Conv2DPadding,
+    weight_init: WeightInitializer,
+    scope: &mut Scope,
+) -> Result<Conv2DBottleneckResidual, Status> {
+    let conv0 = conv2d(
+        &format!("{}_conv0", name.as_ref()),
+        data_type,
+        x.clone(),
+        channels,
+        middle_channels,
+        &[1, 1],
+        &[1, 1],
+        Conv2DPadding::Same,
+        WeightInitializer::He,
+        scope,
+    )?;
+    let activation0 = leaky_relu(
+        conv0.output,
+        &mut scope.with_op_name(&format!("{}_activation0", name.as_ref())),
+    )?;
+
+    let conv1 = separable_conv2d(
+        &format!("{}_conv1", name.as_ref()),
+        data_type,
+        activation0,
+        middle_channels,
+        middle_channels,
+        filter_size,
+        stride,
+        padding,
+        WeightInitializer::He,
+        scope,
+    )?;
+    let activation1 = leaky_relu(
+        conv1.output,
+        &mut scope.with_op_name(&format!("{}_activation1", name.as_ref())),
+    )?;
+
+    let conv2 = conv2d(
+        &format!("{}_conv2", name.as_ref()),
+        data_type,
+        activation1,
+        middle_channels,
+        channels,
+        &[1, 1],
+        &[1, 1],
+        Conv2DPadding::Same,
+        weight_init,
+        scope,
+    )?;
+
+    let add = add(
+        conv2.output,
+        x,
+        &mut scope.with_op_name(&format!("{}_add", name.as_ref())),
+    )?;
+
+    Ok(Conv2DBottleneckResidual {
+        w0: conv0.w,
+        b0: conv0.b,
+        depthwise_w1: conv1.depthwise_w,
+        pointwise_w1: conv1.pointwise_w,
+        b1: conv1.b,
+        w2: conv2.w,
+        b2: conv2.b,
+        output: add,
     })
 }
