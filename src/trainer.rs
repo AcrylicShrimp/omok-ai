@@ -43,13 +43,13 @@ macro_rules! batched {
 impl Trainer {
     pub const MODEL_NAME: &'static str = "alpha-zero";
 
-    pub const REPLAY_MEMORY_SIZE: usize = 50_000;
+    pub const REPLAY_MEMORY_SIZE: usize = 600_000;
     pub const EPISODE_COUNT: usize = 50;
-    pub const EVALUATE_COUNT: usize = batched!(1600);
-    pub const TRAINING_COUNT: usize = 100;
-    pub const BATCH_SIZE: usize = 64;
+    pub const EVALUATE_COUNT: usize = batched!(800);
+    pub const TRAINING_COUNT: usize = 120;
+    pub const BATCH_SIZE: usize = 128;
 
-    pub const TEST_EVALUATE_COUNT: usize = batched!(1600);
+    pub const TEST_EVALUATE_COUNT: usize = batched!(800);
 
     pub const TEMPERATURE: f32 = 1.0;
     pub const TEMPERATURE_THRESHOLD: usize = 30;
@@ -80,7 +80,7 @@ impl Trainer {
     }
 
     pub fn train(&mut self, iteration_count: usize) -> Result<(), Status> {
-        let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+        let thread_pool = ThreadPoolBuilder::new().num_threads(6).build().unwrap();
         let mut rng = thread_rng();
         let mut recent_losses = VecDeque::with_capacity(100);
 
