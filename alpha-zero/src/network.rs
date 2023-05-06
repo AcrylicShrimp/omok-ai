@@ -1,5 +1,5 @@
 use environment::Environment;
-use network_utils::{Conv2DPadding, PoolPadding, WeightInitializer};
+use network_utils::{Conv2DPadding, WeightInitializer};
 use tensorflow::{
     ops::{
         constant, leaky_relu, reshape, softmax, softmax_cross_entropy_with_logits, tanh,
@@ -21,17 +21,26 @@ impl Network {
     pub const INPUT_CHANNELS: i64 = 2;
 
     pub const CONV0_FILTER_SIZE: i64 = 3;
-    pub const CONV0_CHANNELS: i64 = 8;
+    pub const CONV0_CHANNELS: i64 = 64;
     pub const CONV0_STRIDE: i64 = 1;
 
     pub const CONV1_FILTER_SIZE: i64 = 3;
-    pub const CONV1_CHANNELS: i64 = 16;
+    pub const CONV1_CHANNELS: i64 = 64;
     pub const CONV1_STRIDE: i64 = 1;
 
-    pub const POOL_FILTER_SIZE: i64 = 2;
-    pub const POOL_STRIDE: i64 = 2;
+    pub const CONV2_FILTER_SIZE: i64 = 3;
+    pub const CONV2_CHANNELS: i64 = 64;
+    pub const CONV2_STRIDE: i64 = 1;
 
-    pub const FLATTEN_SIZE: i64 = 400;
+    pub const CONV3_FILTER_SIZE: i64 = 3;
+    pub const CONV3_CHANNELS: i64 = 64;
+    pub const CONV3_STRIDE: i64 = 1;
+
+    pub const CONV4_FILTER_SIZE: i64 = 1;
+    pub const CONV4_CHANNELS: i64 = 16;
+    pub const CONV4_STRIDE: i64 = 1;
+
+    pub const FLATTEN_SIZE: i64 = 3600;
 
     pub const V_FC0_SIZE: i64 = 256;
     pub const V_FC1_SIZE: i64 = 128;
@@ -56,7 +65,7 @@ impl Network {
             .shape([-1, Self::INPUT_SIZE, Self::INPUT_SIZE, Self::INPUT_CHANNELS])
             .build(&mut scope.with_op_name(input_name.as_ref()))?;
 
-        let conv0 = network_utils::conv2d(
+        let conv0 = network_utils::separable_conv2d(
             "conv0",
             DataType::Float,
             op_input.clone(),
@@ -64,16 +73,17 @@ impl Network {
             Self::CONV0_CHANNELS,
             &[Self::CONV0_FILTER_SIZE, Self::CONV0_FILTER_SIZE],
             &[Self::CONV0_STRIDE, Self::CONV0_STRIDE],
-            Conv2DPadding::Valid,
+            Conv2DPadding::Same,
             WeightInitializer::He,
             scope,
         )?;
         let conv0_activation =
             leaky_relu(conv0.output, &mut scope.with_op_name("conv0_activation"))?;
-        variables.push(conv0.w);
+        variables.push(conv0.depthwise_w);
+        variables.push(conv0.pointwise_w);
         variables.push(conv0.b);
 
-        let conv1 = network_utils::conv2d(
+        let conv1 = network_utils::separable_conv2d(
             "conv1",
             DataType::Float,
             conv0_activation,
@@ -81,26 +91,72 @@ impl Network {
             Self::CONV1_CHANNELS,
             &[Self::CONV1_FILTER_SIZE, Self::CONV1_FILTER_SIZE],
             &[Self::CONV1_STRIDE, Self::CONV1_STRIDE],
-            Conv2DPadding::Valid,
+            Conv2DPadding::Same,
             WeightInitializer::He,
             scope,
         )?;
         let conv1_activation =
             leaky_relu(conv1.output, &mut scope.with_op_name("conv1_activation"))?;
-        variables.push(conv1.w);
+        variables.push(conv1.depthwise_w);
+        variables.push(conv1.pointwise_w);
         variables.push(conv1.b);
 
-        let pool = network_utils::max_pool(
-            "pool",
+        let conv2 = network_utils::separable_conv2d(
+            "conv2",
+            DataType::Float,
             conv1_activation,
-            &[Self::POOL_FILTER_SIZE, Self::POOL_FILTER_SIZE],
-            &[Self::POOL_STRIDE, Self::POOL_STRIDE],
-            PoolPadding::Valid,
+            Self::CONV1_CHANNELS,
+            Self::CONV2_CHANNELS,
+            &[Self::CONV2_FILTER_SIZE, Self::CONV2_FILTER_SIZE],
+            &[Self::CONV2_STRIDE, Self::CONV2_STRIDE],
+            Conv2DPadding::Same,
+            WeightInitializer::He,
             scope,
         )?;
+        let conv2_activation =
+            leaky_relu(conv2.output, &mut scope.with_op_name("conv2_activation"))?;
+        variables.push(conv2.depthwise_w);
+        variables.push(conv2.pointwise_w);
+        variables.push(conv2.b);
+
+        let conv3 = network_utils::separable_conv2d(
+            "conv3",
+            DataType::Float,
+            conv2_activation,
+            Self::CONV2_CHANNELS,
+            Self::CONV3_CHANNELS,
+            &[Self::CONV3_FILTER_SIZE, Self::CONV3_FILTER_SIZE],
+            &[Self::CONV3_STRIDE, Self::CONV3_STRIDE],
+            Conv2DPadding::Same,
+            WeightInitializer::He,
+            scope,
+        )?;
+        let conv3_activation =
+            leaky_relu(conv3.output, &mut scope.with_op_name("conv3_activation"))?;
+        variables.push(conv3.depthwise_w);
+        variables.push(conv3.pointwise_w);
+        variables.push(conv3.b);
+
+        let conv4 = network_utils::separable_conv2d(
+            "conv4",
+            DataType::Float,
+            conv3_activation,
+            Self::CONV3_CHANNELS,
+            Self::CONV4_CHANNELS,
+            &[Self::CONV4_FILTER_SIZE, Self::CONV4_FILTER_SIZE],
+            &[Self::CONV4_STRIDE, Self::CONV4_STRIDE],
+            Conv2DPadding::Same,
+            WeightInitializer::He,
+            scope,
+        )?;
+        let conv4_activation =
+            leaky_relu(conv4.output, &mut scope.with_op_name("conv4_activation"))?;
+        variables.push(conv4.depthwise_w);
+        variables.push(conv4.pointwise_w);
+        variables.push(conv4.b);
 
         let flatten = reshape(
-            pool,
+            conv4_activation,
             constant(&[-1, Self::FLATTEN_SIZE], scope)?,
             &mut scope.with_op_name("reshape"),
         )?;
