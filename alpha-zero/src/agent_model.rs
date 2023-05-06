@@ -81,11 +81,11 @@ impl AgentModel {
             MinimizeOptions::default().with_variables(&network.variables),
         )?;
 
-        let mut variables = Vec::new();
-        variables.extend(network.variables.clone());
-        variables.extend(optimizer_vars.clone());
+        let io = ModelIO::new(network.variables.clone(), scope)?;
 
-        let io = ModelIO::new(variables.clone(), scope)?;
+        let mut variables = Vec::new();
+        variables.extend(network.variables);
+        variables.extend(optimizer_vars.clone());
 
         Ok(Self {
             op_input: network.op_input,
