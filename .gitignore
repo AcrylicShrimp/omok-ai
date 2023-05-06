@@ -1,3 +1,6 @@
 /target
 /saves
 .DS_Store
+
+/cuda
+flamegraph.svg
