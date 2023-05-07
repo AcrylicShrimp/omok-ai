@@ -92,6 +92,11 @@ impl MCTSExecutor {
                         // Place the stone.
                         let mut env = node.state.env.clone();
                         let status = env.place_stone(action).unwrap();
+                        let terminal_reward = if status.is_terminal() {
+                            Some(1f32)
+                        } else {
+                            None
+                        };
 
                         // Pre-expand the node.
                         let expanded_child = match self.mcts.expand(
@@ -103,7 +108,7 @@ impl MCTSExecutor {
                                 policy: RwLock::new(
                                     [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE],
                                 ),
-                                z: AtomicF32::new(0f32),
+                                z: AtomicF32::new(terminal_reward.unwrap_or(0f32)),
                             },
                         ) {
                             Some(child) => {
@@ -121,15 +126,7 @@ impl MCTSExecutor {
                         // Collect the requests.
                         requests.push(NNEvalRequest {
                             node: expanded_child,
-                            terminal_reward: if status.is_terminal() {
-                                // Note that we're inverting the reward here.
-                                // This is because the reward is from the perspective of the
-                                // current player, but we want the reward from the perspective
-                                // of the root player.
-                                Some(-1f32)
-                            } else {
-                                None
-                            },
+                            terminal_reward,
                         });
                     }
 

@@ -14,9 +14,9 @@ where
     pub parent: Option<NodePtr<S>>,
     pub action: Option<usize>,
     pub children: RwLock<Vec<NodePtr<S>>>,
-    pub p: AtomicF32,
-    pub w: AtomicF32,
-    pub n: AtomicU64,
+    pub p: AtomicF32, // Prior probability of selecting this node.
+    pub w: AtomicF32, // Total action value. Note that this is perspective of the parent node.
+    pub n: AtomicU64, // Number of times this node has been visited.
     pub v_loss: AtomicU32,
     pub state: S,
 }
