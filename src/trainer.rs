@@ -171,7 +171,6 @@ impl Trainer {
                     turn_count += 1;
 
                     let children_index = {
-                        // TODO: We must ensure that the action is in the children.
                         let children = mcts_executor.mcts.root().children.read();
                         let (index, _) = children
                             .iter()
