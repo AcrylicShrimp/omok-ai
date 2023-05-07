@@ -291,24 +291,32 @@ impl Trainer {
                 loss_run_args.add_feed(&self.agent.op_input, 0, &tensor_input);
                 loss_run_args.add_feed(&self.agent.op_z_input, 0, &tensor_z_input);
                 loss_run_args.add_feed(&self.agent.op_pi_input, 0, &tensor_pi_input);
+                loss_run_args.add_target(&self.agent.op_v_loss);
+                loss_run_args.add_target(&self.agent.op_p_loss);
                 loss_run_args.add_target(&self.agent.op_loss);
 
-                let fetch_token = loss_run_args.request_fetch(&self.agent.op_loss, 0);
+                let v_loss_fetch_token = loss_run_args.request_fetch(&self.agent.op_v_loss, 0);
+                let p_loss_fetch_token = loss_run_args.request_fetch(&self.agent.op_p_loss, 0);
+                let loss_fetch_token = loss_run_args.request_fetch(&self.agent.op_loss, 0);
                 self.session.run(&mut loss_run_args)?;
 
-                let loss = loss_run_args.fetch::<f32>(fetch_token)?;
+                let v_loss = loss_run_args.fetch::<f32>(v_loss_fetch_token)?;
+                let p_loss = loss_run_args.fetch::<f32>(p_loss_fetch_token)?;
+                let loss = loss_run_args.fetch::<f32>(loss_fetch_token)?;
 
                 if recent_losses.len() == 100 {
                     recent_losses.pop_front();
                 }
 
-                recent_losses.push_back(loss[0]);
+                recent_losses.push_back((v_loss[0], p_loss[0], loss[0]));
             }
 
             println!(
-                "[iter={}] Loss: {}",
+                "[iter={}] Loss: {} [v_loss={:.4}, p_loss={:.4}]",
                 iteration + 1,
-                recent_losses.iter().sum::<f32>() / recent_losses.len() as f32
+                recent_losses.iter().map(|loss| loss.2).sum::<f32>() / recent_losses.len() as f32,
+                recent_losses.iter().map(|loss| loss.0).sum::<f32>() / recent_losses.len() as f32,
+                recent_losses.iter().map(|loss| loss.1).sum::<f32>() / recent_losses.len() as f32,
             );
 
             self.save(Self::MODEL_NAME);
