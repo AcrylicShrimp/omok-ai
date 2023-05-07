@@ -122,7 +122,11 @@ impl MCTSExecutor {
                         requests.push(NNEvalRequest {
                             node: expanded_child,
                             terminal_reward: if status.is_terminal() {
-                                Some(1f32)
+                                // Note that we're inverting the reward here.
+                                // This is because the reward is from the perspective of the
+                                // current player, but we want the reward from the perspective
+                                // of the root player.
+                                Some(-1f32)
                             } else {
                                 None
                             },
