@@ -63,7 +63,7 @@ impl AgentModel {
                 scope,
             )?,
             constant(&[0], scope)?,
-            scope,
+            &mut scope.with_op_name("v_loss"),
         )?;
 
         let op_loss = add(
