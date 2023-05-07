@@ -1,3 +1,4 @@
+use crate::utils::{flip_horizontal, flip_vertical, rotate_180, rotate_270, rotate_90};
 use alpha_zero::{AgentModel, BoardState, MCTSExecutor};
 use atomic_float::AtomicF32;
 use environment::{Environment, GameStatus, Stone, Turn};
@@ -46,7 +47,7 @@ impl Trainer {
     pub const REPLAY_MEMORY_SIZE: usize = 600_000;
     pub const EPISODE_COUNT: usize = 50;
     pub const EVALUATE_COUNT: usize = batched!(800);
-    pub const TRAINING_COUNT: usize = 120;
+    pub const TRAINING_COUNT: usize = 600;
     pub const BATCH_SIZE: usize = 128;
 
     pub const TEST_EVALUATE_COUNT: usize = batched!(800);
@@ -234,6 +235,110 @@ impl Trainer {
                     transition.z = z;
                     z = -z;
                 }
+
+                // Augment the replay memory, by rotating and flipping the board.
+                // We can generate extra 5 boards from one board.
+                // 3 from rotation, and 2 from flipping.
+                let mut augmented_replay_memory = Vec::with_capacity(turn_count * 5);
+
+                for transition in self.replay_memory.iter().rev().take(turn_count) {
+                    augmented_replay_memory.push(Transition {
+                        env: {
+                            let mut env = transition.env.clone();
+                            rotate_90(
+                                &transition.env.board,
+                                &mut env.board,
+                                Environment::BOARD_SIZE,
+                            );
+                            env
+                        },
+                        policy: {
+                            let mut policy =
+                                [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
+                            rotate_90(&transition.policy, &mut policy, Environment::BOARD_SIZE);
+                            policy
+                        },
+                        z: transition.z,
+                    });
+                    augmented_replay_memory.push(Transition {
+                        env: {
+                            let mut env = transition.env.clone();
+                            rotate_180(
+                                &transition.env.board,
+                                &mut env.board,
+                                Environment::BOARD_SIZE,
+                            );
+                            env
+                        },
+                        policy: {
+                            let mut policy =
+                                [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
+                            rotate_180(&transition.policy, &mut policy, Environment::BOARD_SIZE);
+                            policy
+                        },
+                        z: transition.z,
+                    });
+                    augmented_replay_memory.push(Transition {
+                        env: {
+                            let mut env = transition.env.clone();
+                            rotate_270(
+                                &transition.env.board,
+                                &mut env.board,
+                                Environment::BOARD_SIZE,
+                            );
+                            env
+                        },
+                        policy: {
+                            let mut policy =
+                                [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
+                            rotate_270(&transition.policy, &mut policy, Environment::BOARD_SIZE);
+                            policy
+                        },
+                        z: transition.z,
+                    });
+                    augmented_replay_memory.push(Transition {
+                        env: {
+                            let mut env = transition.env.clone();
+                            flip_horizontal(
+                                &transition.env.board,
+                                &mut env.board,
+                                Environment::BOARD_SIZE,
+                            );
+                            env
+                        },
+                        policy: {
+                            let mut policy =
+                                [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
+                            flip_horizontal(
+                                &transition.policy,
+                                &mut policy,
+                                Environment::BOARD_SIZE,
+                            );
+                            policy
+                        },
+                        z: transition.z,
+                    });
+                    augmented_replay_memory.push(Transition {
+                        env: {
+                            let mut env = transition.env.clone();
+                            flip_vertical(
+                                &transition.env.board,
+                                &mut env.board,
+                                Environment::BOARD_SIZE,
+                            );
+                            env
+                        },
+                        policy: {
+                            let mut policy =
+                                [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
+                            flip_vertical(&transition.policy, &mut policy, Environment::BOARD_SIZE);
+                            policy
+                        },
+                        z: transition.z,
+                    });
+                }
+
+                self.replay_memory.extend(augmented_replay_memory);
             }
 
             println!();
