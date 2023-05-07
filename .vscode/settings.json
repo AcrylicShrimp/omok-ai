@@ -1,7 +1,7 @@
 {
   "rust-analyzer.linkedProjects": [
+    "./alpha-zero/Cargo.toml",
     "./environment/Cargo.toml",
-    "./gui/Cargo.toml",
     "./mcts/Cargo.toml",
     "./network-utils/Cargo.toml"
   ]
