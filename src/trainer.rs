@@ -435,7 +435,7 @@ impl Trainer {
             println!(
                 "[iter={}] Loss: {} [v_loss={:.4}, p_loss={:.4}]",
                 iteration + 1,
-                loss
+                loss,
                 v_loss,
                 p_loss,
             );
