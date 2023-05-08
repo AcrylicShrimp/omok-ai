@@ -1,5 +1,6 @@
 mod plot;
 mod trainer;
+mod utils;
 
 use tensorflow::Status;
 use trainer::Trainer;
