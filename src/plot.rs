@@ -41,10 +41,10 @@ impl Plotter {
         Ok(())
     }
 
-    pub fn load(&mut self, path: impl AsRef<Path>) -> Result<Self, PlotError> {
+    pub fn load(&mut self, path: impl AsRef<Path>) -> Result<(), PlotError> {
         let file = File::open(path)?;
-        let losses = bincode::deserialize_from(file)?;
-        Ok(Self { losses })
+        self.losses = bincode::deserialize_from(file)?;
+        Ok(())
     }
 
     pub fn draw_plot(&mut self, path: impl AsRef<Path>) {
