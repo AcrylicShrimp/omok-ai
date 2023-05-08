@@ -435,9 +435,9 @@ impl Trainer {
             println!(
                 "[iter={}] Loss: {} [v_loss={:.4}, p_loss={:.4}]",
                 iteration + 1,
+                loss
                 v_loss,
                 p_loss,
-                loss
             );
 
             self.plotter.add_loss((v_loss, p_loss, loss));
