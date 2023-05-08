@@ -91,7 +91,7 @@ impl Trainer {
     }
 
     pub fn train(&mut self, iteration_count: usize) -> Result<(), Status> {
-        let thread_pool = ThreadPoolBuilder::new().num_threads(6).build().unwrap();
+        let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut rng = thread_rng();
         let mut recent_losses = VecDeque::with_capacity(100);
 
