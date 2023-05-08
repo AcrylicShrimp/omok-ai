@@ -11,7 +11,7 @@ pub fn draw_loss_plot(losses: &[(f32, f32, f32)], path: impl AsRef<Path>) {
     let len = losses.len();
     let max_loss = *losses
         .iter()
-        .map(|(loss, _, _)| loss)
+        .map(|(_, _, loss)| loss)
         .max_by(|a, b| f32::total_cmp(a, b))
         .unwrap();
 
@@ -37,7 +37,7 @@ pub fn draw_loss_plot(losses: &[(f32, f32, f32)], path: impl AsRef<Path>) {
                 losses
                     .iter()
                     .enumerate()
-                    .map(|(epoch, &(loss, _, _))| (epoch, loss)),
+                    .map(|(epoch, &(_, _, loss))| (epoch, loss)),
                 color.stroke_width(3),
             ))
             .unwrap()
@@ -52,7 +52,7 @@ pub fn draw_loss_plot(losses: &[(f32, f32, f32)], path: impl AsRef<Path>) {
                 losses
                     .iter()
                     .enumerate()
-                    .map(|(epoch, &(_, loss, _))| (epoch, loss)),
+                    .map(|(epoch, &(loss, _, _))| (epoch, loss)),
                 color.stroke_width(3),
             ))
             .unwrap()
@@ -67,7 +67,7 @@ pub fn draw_loss_plot(losses: &[(f32, f32, f32)], path: impl AsRef<Path>) {
                 losses
                     .iter()
                     .enumerate()
-                    .map(|(epoch, &(_, _, loss))| (epoch, loss)),
+                    .map(|(epoch, &(_, loss, _))| (epoch, loss)),
                 color.stroke_width(3),
             ))
             .unwrap()
