@@ -425,7 +425,7 @@ impl Trainer {
                 recent_losses.iter().map(|loss| loss.1).sum::<f32>() / recent_losses.len() as f32,
             );
 
-            draw_loss_plot(recent_losses.make_contiguous(), "plots/loss.png");
+            draw_loss_plot(recent_losses.make_contiguous(), "plots/loss.svg");
 
             self.save(Self::MODEL_NAME);
             println!("[iter={}] Model saved.", iteration + 1);
