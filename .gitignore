@@ -1,6 +1,7 @@
-/target
-/saves
 .DS_Store
+flamegraph.svg
 
 /cuda
-flamegraph.svg
+/plots
+/saves
+/target
