@@ -1,3 +1,4 @@
+use crate::plot::draw_loss_plot;
 use alpha_zero::{AgentModel, BoardState, MCTSExecutor};
 use atomic_float::AtomicF32;
 use environment::{Environment, GameStatus, Stone, Turn};
@@ -318,6 +319,8 @@ impl Trainer {
                 recent_losses.iter().map(|loss| loss.0).sum::<f32>() / recent_losses.len() as f32,
                 recent_losses.iter().map(|loss| loss.1).sum::<f32>() / recent_losses.len() as f32,
             );
+
+            draw_loss_plot(recent_losses.make_contiguous(), "plots/loss.png");
 
             self.save(Self::MODEL_NAME);
             println!("[iter={}] Model saved.", iteration + 1);

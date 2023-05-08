@@ -1,3 +1,4 @@
+mod plot;
 mod trainer;
 
 use tensorflow::Status;

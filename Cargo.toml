@@ -14,6 +14,7 @@ environment = { path = "environment" }
 mcts = { path = "mcts" }
 network-utils = { path = "network-utils" }
 parking_lot = { version = "0.12", features = ["hardware-lock-elision"] }
+plotters = { version = "0.3" }
 rand = { version = "0.8" }
 rayon = { version = "1.7" }
 serde = { version = "1", features = ["derive"] }
