@@ -1,5 +1,7 @@
-use crate::plot::draw_loss_plot;
-use crate::utils::{flip_horizontal, flip_vertical, rotate_180, rotate_270, rotate_90};
+use crate::{
+    plot::Plotter,
+    utils::{flip_horizontal, flip_vertical, rotate_180, rotate_270, rotate_90},
+};
 use alpha_zero::{AgentModel, BoardState, MCTSExecutor};
 use atomic_float::AtomicF32;
 use environment::{Environment, GameStatus, Stone, Turn};
@@ -27,6 +29,7 @@ pub struct Transition {
 pub struct Trainer {
     pub session: Session,
     pub agent: AgentModel,
+    pub plotter: Plotter,
     pub replay_memory: VecDeque<Transition>,
 }
 
@@ -69,9 +72,15 @@ impl Trainer {
 
         session.run(&mut init_run_args)?;
 
+        let mut plotter = Plotter::new();
+        if Path::new("plots").join("losses").exists() {
+            plotter.load("plots/losses").unwrap();
+        }
+
         let this = Self {
             session,
             agent,
+            plotter,
             replay_memory: VecDeque::with_capacity(Self::REPLAY_MEMORY_SIZE),
         };
 
@@ -414,6 +423,7 @@ impl Trainer {
                     recent_losses.pop_front();
                 }
 
+                self.plotter.add_loss((v_loss[0], p_loss[0], loss[0]));
                 recent_losses.push_back((v_loss[0], p_loss[0], loss[0]));
             }
 
@@ -425,7 +435,8 @@ impl Trainer {
                 recent_losses.iter().map(|loss| loss.1).sum::<f32>() / recent_losses.len() as f32,
             );
 
-            draw_loss_plot(recent_losses.make_contiguous(), "plots/loss.svg");
+            self.plotter.save("plots/losses").unwrap();
+            self.plotter.draw_plot("plots/loss.svg");
 
             self.save(Self::MODEL_NAME);
             println!("[iter={}] Model saved.", iteration + 1);

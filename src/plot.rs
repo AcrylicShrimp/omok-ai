@@ -1,10 +1,58 @@
+use bincode::serialize_into;
 use plotters::{
     prelude::*,
     style::{AsRelative, WHITE},
 };
-use std::path::Path;
+use std::{collections::VecDeque, fs::File, path::Path};
+use thiserror::Error;
 
-pub fn draw_loss_plot(losses: &[(f32, f32, f32)], path: impl AsRef<Path>) {
+#[derive(Error, Debug)]
+pub enum PlotError {
+    #[error("IO error: {0}")]
+    IO(#[from] std::io::Error),
+    #[error("Bincode error: {0}")]
+    Bincode(#[from] bincode::Error),
+}
+
+pub struct Plotter {
+    losses: VecDeque<(f32, f32, f32)>,
+}
+
+impl Plotter {
+    pub const MAX_LOSSES: usize = 1024 * 1024;
+
+    pub fn new() -> Self {
+        Self {
+            losses: VecDeque::new(),
+        }
+    }
+
+    pub fn add_loss(&mut self, loss: (f32, f32, f32)) {
+        if self.losses.len() == Self::MAX_LOSSES {
+            self.losses.pop_front();
+        }
+
+        self.losses.push_back(loss);
+    }
+
+    pub fn save(&self, path: impl AsRef<Path>) -> Result<(), PlotError> {
+        let file = File::create(path)?;
+        serialize_into(file, &self.losses)?;
+        Ok(())
+    }
+
+    pub fn load(&mut self, path: impl AsRef<Path>) -> Result<Self, PlotError> {
+        let file = File::open(path)?;
+        let losses = bincode::deserialize_from(file)?;
+        Ok(Self { losses })
+    }
+
+    pub fn draw_plot(&mut self, path: impl AsRef<Path>) {
+        draw_loss_plot(self.losses.make_contiguous(), path);
+    }
+}
+
+fn draw_loss_plot(losses: &[(f32, f32, f32)], path: impl AsRef<Path>) {
     let root = SVGBackend::new(path.as_ref(), (1024, 768)).into_drawing_area();
     root.fill(&WHITE).unwrap();
 
