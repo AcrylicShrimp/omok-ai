@@ -423,18 +423,24 @@ impl Trainer {
                     recent_losses.pop_front();
                 }
 
-                self.plotter.add_loss((v_loss[0], p_loss[0], loss[0]));
                 recent_losses.push_back((v_loss[0], p_loss[0], loss[0]));
             }
+
+            let (v_loss, p_loss, loss) = (
+                recent_losses.iter().map(|loss| loss.0).sum::<f32>() / recent_losses.len() as f32,
+                recent_losses.iter().map(|loss| loss.1).sum::<f32>() / recent_losses.len() as f32,
+                recent_losses.iter().map(|loss| loss.2).sum::<f32>() / recent_losses.len() as f32,
+            );
 
             println!(
                 "[iter={}] Loss: {} [v_loss={:.4}, p_loss={:.4}]",
                 iteration + 1,
-                recent_losses.iter().map(|loss| loss.2).sum::<f32>() / recent_losses.len() as f32,
-                recent_losses.iter().map(|loss| loss.0).sum::<f32>() / recent_losses.len() as f32,
-                recent_losses.iter().map(|loss| loss.1).sum::<f32>() / recent_losses.len() as f32,
+                v_loss,
+                p_loss,
+                loss
             );
 
+            self.plotter.add_loss((v_loss, p_loss, loss));
             self.plotter.save("plots/losses").unwrap();
             self.plotter.draw_plot("plots/loss.svg");
 
