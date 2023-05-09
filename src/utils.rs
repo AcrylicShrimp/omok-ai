@@ -62,3 +62,48 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_rotate_90() {
+        let src = [1, 2, 3, 4];
+        let mut dst = [0; 4];
+        rotate_90(&src, &mut dst, 2);
+        assert_eq!(dst, [3, 1, 4, 2]);
+    }
+
+    #[test]
+    fn test_rotate_180() {
+        let src = [1, 2, 3, 4];
+        let mut dst = [0; 4];
+        rotate_180(&src, &mut dst, 2);
+        assert_eq!(dst, [4, 3, 2, 1]);
+    }
+
+    #[test]
+    fn test_rotate_270() {
+        let src = [1, 2, 3, 4];
+        let mut dst = [0; 4];
+        rotate_270(&src, &mut dst, 2);
+        assert_eq!(dst, [2, 4, 1, 3]);
+    }
+
+    #[test]
+    fn test_flip_horizontal() {
+        let src = [1, 2, 3, 4];
+        let mut dst = [0; 4];
+        flip_horizontal(&src, &mut dst, 2);
+        assert_eq!(dst, [2, 1, 4, 3]);
+    }
+
+    #[test]
+    fn test_flip_vertical() {
+        let src = [1, 2, 3, 4];
+        let mut dst = [0; 4];
+        flip_vertical(&src, &mut dst, 2);
+        assert_eq!(dst, [3, 4, 1, 2]);
+    }
+}
