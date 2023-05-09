@@ -5,8 +5,8 @@ where
     let src = src.as_ref();
     let dst = dst.as_mut();
     for i in 0..size {
-        for j in (0..size).rev() {
-            dst[i * size + j] = src[j * size + i];
+        for j in 0..size {
+            dst[i * size + j] = src[(size - j - 1) * size + i];
         }
     }
 }
@@ -19,7 +19,7 @@ where
     let dst = dst.as_mut();
     for i in (0..size).rev() {
         for j in (0..size).rev() {
-            dst[i * size + j] = src[j * size + i];
+            dst[i * size + j] = src[(size - i - 1) * size + (size - j - 1)];
         }
     }
 }
@@ -32,7 +32,7 @@ where
     let dst = dst.as_mut();
     for i in (0..size).rev() {
         for j in 0..size {
-            dst[i * size + j] = src[j * size + i];
+            dst[i * size + j] = src[j * size + (size - i - 1)];
         }
     }
 }
