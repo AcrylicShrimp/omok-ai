@@ -3,6 +3,7 @@
     "./alpha-zero/Cargo.toml",
     "./environment/Cargo.toml",
     "./mcts/Cargo.toml",
-    "./network-utils/Cargo.toml"
+    "./network-utils/Cargo.toml",
+    "./Cargo.toml"
   ]
 }
