@@ -2,7 +2,7 @@ use environment::Environment;
 use network_utils::{Conv2DPadding, WeightInitializer};
 use tensorflow::{
     ops::{
-        constant, leaky_relu, reshape, softmax, softmax_cross_entropy_with_logits, tanh,
+        constant, leaky_relu, mean, reshape, softmax, softmax_cross_entropy_with_logits, tanh,
         Placeholder,
     },
     DataType, Operation, Scope, Status, Variable,
@@ -236,9 +236,9 @@ impl Network {
             &mut scope.with_op_name(p_output_name.as_ref()),
         )?;
 
-        let p_loss = softmax_cross_entropy_with_logits(
-            p_fc1.output,
-            op_p_label,
+        let p_loss = mean(
+            softmax_cross_entropy_with_logits(p_fc1.output, op_p_label, scope)?,
+            constant(&[0, 1], scope)?,
             &mut scope.with_op_name(p_loss_name.as_ref()),
         )?;
 
