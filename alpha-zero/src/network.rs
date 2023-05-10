@@ -20,35 +20,31 @@ impl Network {
     pub const INPUT_SIZE: i64 = Environment::BOARD_SIZE as i64;
     pub const INPUT_CHANNELS: i64 = 2;
 
-    pub const CONV0_FILTER_SIZE: i64 = 3;
-    pub const CONV0_CHANNELS: i64 = 64;
-    pub const CONV0_STRIDE: i64 = 1;
+    pub const RESIDUAL_FILTER_SIZE: i64 = 3;
+    pub const RESIDUAL_CHANNELS: i64 = 256;
+    pub const RESIDUAL_MIDDLE_CHANNELS: i64 = 64;
+    pub const RESIDUAL_STRIDE: i64 = 1;
+    pub const RESIDUAL_COUNT: i64 = 9;
 
-    pub const CONV1_FILTER_SIZE: i64 = 3;
-    pub const CONV1_CHANNELS: i64 = 64;
-    pub const CONV1_STRIDE: i64 = 1;
+    pub const V_CONV_FILTER_SIZE: i64 = 1;
+    pub const V_CONV_CHANNELS: i64 = 1;
+    pub const V_CONV_STRIDE: i64 = 1;
 
-    pub const CONV2_FILTER_SIZE: i64 = 3;
-    pub const CONV2_CHANNELS: i64 = 64;
-    pub const CONV2_STRIDE: i64 = 1;
-
-    pub const CONV3_FILTER_SIZE: i64 = 3;
-    pub const CONV3_CHANNELS: i64 = 64;
-    pub const CONV3_STRIDE: i64 = 1;
-
-    pub const CONV4_FILTER_SIZE: i64 = 1;
-    pub const CONV4_CHANNELS: i64 = 16;
-    pub const CONV4_STRIDE: i64 = 1;
-
-    pub const FLATTEN_SIZE: i64 = 3600;
+    pub const V_FLATTEN_SIZE: i64 = 225;
 
     pub const V_FC0_SIZE: i64 = 256;
-    pub const V_FC1_SIZE: i64 = 128;
+    pub const V_FC1_SIZE: i64 = 256;
     pub const V_FC2_SIZE: i64 = 1;
 
+    pub const P_CONV_FILTER_SIZE: i64 = 1;
+    pub const P_CONV_CHANNELS: i64 = 64;
+    pub const P_CONV_STRIDE: i64 = 1;
+
+    pub const P_FLATTEN_SIZE: i64 =
+        Environment::BOARD_SIZE as i64 * Environment::BOARD_SIZE as i64 * 64;
+
     pub const P_FC0_SIZE: i64 = 256;
-    pub const P_FC1_SIZE: i64 = 128;
-    pub const P_FC2_SIZE: i64 = Environment::BOARD_SIZE as i64 * Environment::BOARD_SIZE as i64;
+    pub const P_FC1_SIZE: i64 = Environment::BOARD_SIZE as i64 * Environment::BOARD_SIZE as i64;
     pub const P_OUTPUT_SIZE: i64 = Environment::BOARD_SIZE as i64;
 
     pub fn new(
@@ -65,107 +61,83 @@ impl Network {
             .shape([-1, Self::INPUT_SIZE, Self::INPUT_SIZE, Self::INPUT_CHANNELS])
             .build(&mut scope.with_op_name(input_name.as_ref()))?;
 
-        let conv0 = network_utils::separable_conv2d(
-            "conv0",
+        let conv = network_utils::conv2d(
+            "conv",
             DataType::Float,
             op_input.clone(),
             Self::INPUT_CHANNELS,
-            Self::CONV0_CHANNELS,
-            &[Self::CONV0_FILTER_SIZE, Self::CONV0_FILTER_SIZE],
-            &[Self::CONV0_STRIDE, Self::CONV0_STRIDE],
+            Self::RESIDUAL_CHANNELS,
+            &[1, 1],
+            &[1, 1],
             Conv2DPadding::Same,
             WeightInitializer::He,
             scope,
         )?;
-        let conv0_activation =
-            leaky_relu(conv0.output, &mut scope.with_op_name("conv0_activation"))?;
-        variables.push(conv0.depthwise_w);
-        variables.push(conv0.pointwise_w);
-        variables.push(conv0.b);
+        let activation = leaky_relu(conv.output, &mut scope.with_op_name("conv_activation"))?;
+        variables.push(conv.w);
+        variables.push(conv.b);
 
-        let conv1 = network_utils::separable_conv2d(
-            "conv1",
+        let mut previous = activation;
+
+        for i in 0..Self::RESIDUAL_COUNT {
+            let residual = network_utils::conv2d_bottleneck_residual(
+                format!("residual_{}", i),
+                DataType::Float,
+                previous,
+                Self::RESIDUAL_CHANNELS,
+                Self::RESIDUAL_MIDDLE_CHANNELS,
+                &[Self::RESIDUAL_FILTER_SIZE, Self::RESIDUAL_FILTER_SIZE],
+                &[Self::RESIDUAL_STRIDE, Self::RESIDUAL_STRIDE],
+                Conv2DPadding::Same,
+                WeightInitializer::He,
+                scope,
+            )?;
+            let activation = leaky_relu(
+                residual.output,
+                &mut scope.with_op_name(&format!("residual_{}_activation", i)),
+            )?;
+
+            variables.push(residual.w0);
+            variables.push(residual.b0);
+
+            variables.push(residual.depthwise_w1);
+            variables.push(residual.pointwise_w1);
+            variables.push(residual.b1);
+
+            variables.push(residual.w2);
+            variables.push(residual.b2);
+
+            previous = activation;
+        }
+
+        let v_conv = network_utils::conv2d(
+            "v_conv",
             DataType::Float,
-            conv0_activation,
-            Self::CONV0_CHANNELS,
-            Self::CONV1_CHANNELS,
-            &[Self::CONV1_FILTER_SIZE, Self::CONV1_FILTER_SIZE],
-            &[Self::CONV1_STRIDE, Self::CONV1_STRIDE],
+            previous.clone(),
+            Self::RESIDUAL_CHANNELS,
+            Self::V_CONV_CHANNELS,
+            &[Self::V_CONV_FILTER_SIZE, Self::V_CONV_FILTER_SIZE],
+            &[Self::V_CONV_STRIDE, Self::V_CONV_STRIDE],
             Conv2DPadding::Same,
             WeightInitializer::He,
             scope,
         )?;
-        let conv1_activation =
-            leaky_relu(conv1.output, &mut scope.with_op_name("conv1_activation"))?;
-        variables.push(conv1.depthwise_w);
-        variables.push(conv1.pointwise_w);
-        variables.push(conv1.b);
+        let v_conv_activation =
+            leaky_relu(v_conv.output, &mut scope.with_op_name("v_conv_activation"))?;
+        variables.push(v_conv.w);
+        variables.push(v_conv.b);
 
-        let conv2 = network_utils::separable_conv2d(
-            "conv2",
-            DataType::Float,
-            conv1_activation,
-            Self::CONV1_CHANNELS,
-            Self::CONV2_CHANNELS,
-            &[Self::CONV2_FILTER_SIZE, Self::CONV2_FILTER_SIZE],
-            &[Self::CONV2_STRIDE, Self::CONV2_STRIDE],
-            Conv2DPadding::Same,
-            WeightInitializer::He,
-            scope,
-        )?;
-        let conv2_activation =
-            leaky_relu(conv2.output, &mut scope.with_op_name("conv2_activation"))?;
-        variables.push(conv2.depthwise_w);
-        variables.push(conv2.pointwise_w);
-        variables.push(conv2.b);
-
-        let conv3 = network_utils::separable_conv2d(
-            "conv3",
-            DataType::Float,
-            conv2_activation,
-            Self::CONV2_CHANNELS,
-            Self::CONV3_CHANNELS,
-            &[Self::CONV3_FILTER_SIZE, Self::CONV3_FILTER_SIZE],
-            &[Self::CONV3_STRIDE, Self::CONV3_STRIDE],
-            Conv2DPadding::Same,
-            WeightInitializer::He,
-            scope,
-        )?;
-        let conv3_activation =
-            leaky_relu(conv3.output, &mut scope.with_op_name("conv3_activation"))?;
-        variables.push(conv3.depthwise_w);
-        variables.push(conv3.pointwise_w);
-        variables.push(conv3.b);
-
-        let conv4 = network_utils::separable_conv2d(
-            "conv4",
-            DataType::Float,
-            conv3_activation,
-            Self::CONV3_CHANNELS,
-            Self::CONV4_CHANNELS,
-            &[Self::CONV4_FILTER_SIZE, Self::CONV4_FILTER_SIZE],
-            &[Self::CONV4_STRIDE, Self::CONV4_STRIDE],
-            Conv2DPadding::Same,
-            WeightInitializer::He,
-            scope,
-        )?;
-        let conv4_activation =
-            leaky_relu(conv4.output, &mut scope.with_op_name("conv4_activation"))?;
-        variables.push(conv4.depthwise_w);
-        variables.push(conv4.pointwise_w);
-        variables.push(conv4.b);
-
-        let flatten = reshape(
-            conv4_activation,
-            constant(&[-1, Self::FLATTEN_SIZE], scope)?,
-            &mut scope.with_op_name("reshape"),
+        let v_flatten = reshape(
+            v_conv_activation,
+            constant(&[-1, Self::V_FLATTEN_SIZE], scope)?,
+            &mut scope.with_op_name("v_flatten"),
         )?;
 
         let v_fc0 = network_utils::fc(
             "v_fc0",
             DataType::Float,
-            flatten.clone(),
-            Self::FLATTEN_SIZE,
+            v_flatten,
+            Self::V_FLATTEN_SIZE,
             Self::V_FC0_SIZE,
             WeightInitializer::He,
             scope,
@@ -205,11 +177,34 @@ impl Network {
         variables.push(v_fc2.w);
         variables.push(v_fc2.b);
 
+        let p_conv = network_utils::conv2d(
+            "p_conv",
+            DataType::Float,
+            previous.clone(),
+            Self::RESIDUAL_CHANNELS,
+            Self::P_CONV_CHANNELS,
+            &[Self::P_CONV_FILTER_SIZE, Self::P_CONV_FILTER_SIZE],
+            &[Self::P_CONV_STRIDE, Self::P_CONV_STRIDE],
+            Conv2DPadding::Same,
+            WeightInitializer::He,
+            scope,
+        )?;
+        let p_conv_activation =
+            leaky_relu(p_conv.output, &mut scope.with_op_name("p_conv_activation"))?;
+        variables.push(p_conv.w);
+        variables.push(p_conv.b);
+
+        let p_flatten = reshape(
+            p_conv_activation,
+            constant(&[-1, Self::P_FLATTEN_SIZE], scope)?,
+            &mut scope.with_op_name("p_flatten"),
+        )?;
+
         let p_fc0 = network_utils::fc(
             "p_fc0",
             DataType::Float,
-            flatten,
-            Self::FLATTEN_SIZE,
+            p_flatten,
+            Self::P_FLATTEN_SIZE,
             Self::P_FC0_SIZE,
             WeightInitializer::He,
             scope,
@@ -228,35 +223,21 @@ impl Network {
             WeightInitializer::He,
             scope,
         )?;
-        let p_fc1_activation =
-            leaky_relu(p_fc1.output, &mut scope.with_op_name("p_fc1_activation"))?;
+        let p_fc1_activation = softmax(
+            p_fc1.output.clone(),
+            &mut scope.with_op_name("p_fc1_activation"),
+        )?;
         variables.push(p_fc1.w);
         variables.push(p_fc1.b);
 
-        let p_fc2 = network_utils::fc(
-            "p_fc2",
-            DataType::Float,
-            p_fc1_activation,
-            Self::P_FC1_SIZE,
-            Self::P_FC2_SIZE,
-            WeightInitializer::He,
-            scope,
-        )?;
-        let p_fc2_activation = softmax(
-            p_fc2.output.clone(),
-            &mut scope.with_op_name("p_fc2_activation"),
-        )?;
-        variables.push(p_fc2.w);
-        variables.push(p_fc2.b);
-
         let p_output = reshape(
-            p_fc2_activation.clone(),
+            p_fc1_activation.clone(),
             constant(&[-1, Self::P_OUTPUT_SIZE, Self::P_OUTPUT_SIZE], scope)?,
             &mut scope.with_op_name(p_output_name.as_ref()),
         )?;
 
         let p_loss = softmax_cross_entropy_with_logits(
-            p_fc2.output,
+            p_fc1.output,
             op_p_label,
             &mut scope.with_op_name(p_loss_name.as_ref()),
         )?;
