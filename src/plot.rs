@@ -68,7 +68,7 @@ fn draw_loss_plot(losses: &[(f32, f32, f32)], path: impl AsRef<Path>) {
         .set_label_area_size(LabelAreaPosition::Left, 8.percent())
         .set_label_area_size(LabelAreaPosition::Bottom, 4.percent())
         .margin((1).percent())
-        .build_cartesian_2d(0..len, 0f32..max_loss)
+        .build_cartesian_2d(0..len, (0f32..max_loss).log_scale())
         .unwrap();
 
     chart
