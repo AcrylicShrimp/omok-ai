@@ -1,7 +1,7 @@
 use super::{mcts_node::BoardState, AgentModel};
 use atomic_float::AtomicF32;
 use bitvec::vec::BitVec;
-use environment::Environment;
+use environment::{Environment, Stone};
 use mcts::{Node, NodePtr, State, MCTS};
 use parking_lot::RwLock;
 use rand::{seq::SliceRandom, thread_rng};
@@ -98,6 +98,24 @@ impl MCTSExecutor {
                             None
                         };
 
+                        // Pre-compute policy.
+                        // This will be overwritten by the neural network evaluation.
+                        // Until then, we use the uniform distribution.
+                        let mut policy = [1f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
+
+                        for action in 0..Environment::BOARD_SIZE * Environment::BOARD_SIZE {
+                            if env.board[action] != Stone::Empty {
+                                policy[action] = 0f32;
+                            }
+                        }
+
+                        let sum = policy.iter().sum::<f32>();
+                        if f32::EPSILON <= sum {
+                            for policy in policy.iter_mut() {
+                                *policy /= sum;
+                            }
+                        }
+
                         // Pre-expand the node.
                         let expanded_child = match self.mcts.expand(
                             node,
@@ -105,9 +123,7 @@ impl MCTSExecutor {
                             BoardState {
                                 env,
                                 status,
-                                policy: RwLock::new(
-                                    [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE],
-                                ),
+                                policy: RwLock::new(policy),
                                 z: AtomicF32::new(terminal_reward.unwrap_or(0f32)),
                             },
                         ) {
