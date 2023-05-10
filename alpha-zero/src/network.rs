@@ -238,7 +238,7 @@ impl Network {
 
         let p_loss = mean(
             softmax_cross_entropy_with_logits(p_fc1.output, op_p_label, scope)?,
-            constant(&[0, 1], scope)?,
+            constant(&[0], scope)?,
             &mut scope.with_op_name(p_loss_name.as_ref()),
         )?;
 
