@@ -9,6 +9,9 @@ edition = "2021"
 atomic_float = { version = "0.1" }
 bincode = { version = "1" }
 bitvec = { version = "1" }
+burn = "0.7.0"
+burn-autodiff = "0.7.0"
+burn-tch = "0.7.0"
 environment = { path = "../environment" }
 mcts = { path = "../mcts" }
 network-utils = { path = "../network-utils" }

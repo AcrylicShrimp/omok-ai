@@ -1,3 +1,9 @@
+mod residual_block;
+mod separable_conv2d;
+
+pub use residual_block::*;
+pub use separable_conv2d::*;
+
 use tensorflow::{
     ops::{
         add, assign, bias_add, broadcast_to, constant, leaky_relu, mat_mul, mul, reshape,
