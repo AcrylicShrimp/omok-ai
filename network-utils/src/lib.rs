@@ -1,7 +1,8 @@
 use tensorflow::{
     ops::{
-        add, bias_add, broadcast_to, constant, leaky_relu, mat_mul, mul, Conv2D as TFConv2D,
-        DepthwiseConv2dNative as TFDepthwiseConv2dNative, MaxPool, RandomStandardNormal,
+        add, assign, bias_add, broadcast_to, constant, leaky_relu, mat_mul, mul, reshape,
+        Conv2D as TFConv2D, DepthwiseConv2dNative as TFDepthwiseConv2dNative, FusedBatchNormV3,
+        Identity, MaxPool, RandomStandardNormal,
     },
     DataType, Operation, Scope, Status, Variable,
 };
@@ -58,6 +59,15 @@ pub struct Conv2DBottleneckResidual {
     pub b1: Variable,
     pub w2: Variable,
     pub b2: Variable,
+    pub output: Operation,
+}
+
+#[derive(Debug, Clone)]
+pub struct BatchNorm {
+    pub scale: Variable,
+    pub offset: Variable,
+    pub mean: Variable,
+    pub variance: Variable,
     pub output: Operation,
 }
 
@@ -448,4 +458,137 @@ pub fn conv2d_bottleneck_residual(
         b2: conv2.b,
         output: add,
     })
+}
+
+pub fn batch_norm(
+    name: impl AsRef<str>,
+    data_type: DataType,
+    x: Operation,
+    shape: &[i64; 4],
+    is_training: bool,
+    scope: &mut Scope,
+) -> Result<BatchNorm, Status> {
+    let name = name.as_ref();
+    let scale = Variable::builder()
+        .data_type(data_type)
+        .shape(&[shape[3]])
+        .initial_value(broadcast_to(
+            constant(&[1f32], scope)?,
+            constant(&[shape[3]], scope)?,
+            scope,
+        )?)
+        .build(&mut scope.with_op_name(&format!("{}_scale", name)))?;
+    let offset = Variable::builder()
+        .data_type(data_type)
+        .shape(&[shape[3]])
+        .initial_value(broadcast_to(
+            constant(&[0f32], scope)?,
+            constant(&[shape[3]], scope)?,
+            scope,
+        )?)
+        .build(&mut scope.with_op_name(&format!("{}_offset", name)))?;
+    let mean = Variable::builder()
+        .data_type(data_type)
+        .shape(&[shape[3]])
+        .initial_value(broadcast_to(
+            constant(&[0f32], scope)?,
+            constant(&[shape[3]], scope)?,
+            scope,
+        )?)
+        .build(&mut scope.with_op_name(&format!("{}_mean", name)))?;
+    let variance = Variable::builder()
+        .data_type(data_type)
+        .shape(&[shape[3]])
+        .initial_value(broadcast_to(
+            constant(&[1f32], scope)?,
+            constant(&[shape[3]], scope)?,
+            scope,
+        )?)
+        .build(&mut scope.with_op_name(&format!("{}_variance", name)))?;
+
+    if is_training {
+        let bn = FusedBatchNormV3::new()
+            .data_format("NHWC")
+            .is_training(is_training)
+            .build(
+                x,
+                scale.output().clone(),
+                offset.output().clone(),
+                mean.output().clone(),
+                variance.output().clone(),
+                &mut scope.with_op_name(&format!("{}_bn", name)),
+            )?;
+        let output = Identity::new()
+            .add_control_input(assign(
+                mean.output().clone(),
+                bn.output(1),
+                &mut scope.with_op_name(&format!("{}_update_mean", name)),
+            )?)
+            .add_control_input(assign(
+                variance.output().clone(),
+                bn.output(2),
+                &mut scope.with_op_name(&format!("{}_update_variance", name)),
+            )?)
+            .build(
+                bn.output(0),
+                &mut scope.with_op_name(&format!("{}_output", name)),
+            )?;
+        Ok(BatchNorm {
+            scale,
+            offset,
+            mean,
+            variance,
+            output,
+        })
+    } else {
+        let bn = FusedBatchNormV3::new()
+            .data_format("NHWC")
+            .is_training(is_training)
+            .build(
+                x,
+                scale.output().clone(),
+                offset.output().clone(),
+                mean.output().clone(),
+                variance.output().clone(),
+                &mut scope.with_op_name(&format!("{}_bn", name)),
+            )?;
+        Ok(BatchNorm {
+            scale,
+            offset,
+            mean,
+            variance,
+            output: bn,
+        })
+    }
+}
+
+pub fn batch_norm_fc(
+    name: impl AsRef<str>,
+    data_type: DataType,
+    x: Operation,
+    channels: i64,
+    is_training: bool,
+    scope: &mut Scope,
+) -> Result<BatchNorm, Status> {
+    let name = name.as_ref();
+    let before_reshape = reshape(
+        x,
+        constant(&[-1, 1, 1, channels], scope)?,
+        &mut scope.with_op_name(&format!("{}_input_reshape", name)),
+    )?;
+    let mut bn = batch_norm(
+        name,
+        data_type,
+        before_reshape,
+        &[-1, 1, 1, channels],
+        is_training,
+        scope,
+    )?;
+    let output = reshape(
+        bn.output,
+        constant(&[-1, channels], scope)?,
+        &mut scope.with_op_name(&format!("{}_output_reshape", name)),
+    )?;
+    bn.output = output;
+    Ok(bn)
 }
