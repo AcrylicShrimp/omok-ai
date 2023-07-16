@@ -57,7 +57,7 @@ impl SeparableConv2dConfig {
 
     pub fn depthwise_config(&self) -> Conv2dConfig {
         Conv2dConfig {
-            channels: [self.channels[0], self.channels[0]],
+            channels: [1, self.channels[0]],
             kernel_size: self.kernel_size,
             stride: self.stride,
             dilation: self.dilation,

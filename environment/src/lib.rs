@@ -67,8 +67,8 @@ pub struct Environment {
 }
 
 impl Environment {
-    pub const BOARD_SIZE: usize = 15;
-    pub const SERIAL_STONE_COUNT: usize = 5;
+    pub const BOARD_SIZE: usize = 5;
+    pub const SERIAL_STONE_COUNT: usize = 4;
 
     pub fn new() -> Self {
         Environment {
@@ -78,6 +78,7 @@ impl Environment {
         }
     }
 
+    // TODO: Convert below encoding logic to fit into pytorch's tensor.
     pub fn encode_board(&self, turn: Turn, mut dst: impl AsMut<[f32]>) {
         let dst = dst.as_mut();
         dst.fill(0f32);

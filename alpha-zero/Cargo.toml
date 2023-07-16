@@ -9,9 +9,9 @@ edition = "2021"
 atomic_float = { version = "0.1" }
 bincode = { version = "1" }
 bitvec = { version = "1" }
-burn = "0.7.0"
-burn-autodiff = "0.7.0"
-burn-tch = "0.7.0"
+burn = { version = "0.7" }
+burn-autodiff = { version = "0.7" }
+burn-tch = { version = "0.7" }
 environment = { path = "../environment" }
 mcts = { path = "../mcts" }
 network-utils = { path = "../network-utils" }
@@ -19,5 +19,4 @@ parking_lot = { version = "0.12", features = ["hardware-lock-elision"] }
 rand = { version = "0.8" }
 rayon = { version = "1.7" }
 serde = { version = "1", features = ["derive"] }
-tensorflow = { version = "0.20", features = [] }
 thiserror = { version = "1" }

@@ -5,3 +5,5 @@ flamegraph.svg
 /plots
 /saves
 /target
+
+.envrc

@@ -5,5 +5,8 @@
     "./mcts/Cargo.toml",
     "./network-utils/Cargo.toml",
     "./Cargo.toml"
-  ]
+  ],
+  "rust-analyzer.server.extraEnv": {
+    "DYLD_LIBRARY_PATH": "/opt/homebrew/lib/python3.11/site-packages/torch/lib"
+  }
 }
