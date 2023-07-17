@@ -54,7 +54,12 @@ impl MCTSExecutor {
                         if node.state.is_terminal() {
                             // If the leaf node is terminal state, we don't need to expand it.
                             // Instead we perform backup from the leaf node.
-                            node.propagate(node.state.z.load(Ordering::Relaxed));
+                            let sign = if node.state.env.turn == self.mcts.root().state.env.turn {
+                                1f32
+                            } else {
+                                -1f32
+                            };
+                            node.propagate(sign * node.state.z.load(Ordering::Relaxed));
                             node.v_loss.fetch_sub(1, Ordering::Relaxed);
                             continue;
                         }
@@ -201,8 +206,6 @@ impl MCTSExecutor {
                         // Update the pre-expanded child node.
                         node.state.policy.write().copy_from_slice(p);
 
-                        // We don't update z here, because it will be updated during the backup phase.
-
                         // Update children's prior probability.
                         // This is required because every node after expanded are holding dummy prior probabilities.
                         for child in node.children.read().iter() {
@@ -213,7 +216,12 @@ impl MCTSExecutor {
                         }
 
                         // Perform backup from the expanded child node.
-                        node.propagate(reward);
+                        let sign = if node.state.env.turn == self.mcts.root().state.env.turn {
+                            1f32
+                        } else {
+                            -1f32
+                        };
+                        node.propagate(sign * reward);
                     }
 
                     Ok(())
