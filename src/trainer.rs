@@ -4,7 +4,7 @@ use crate::{
 };
 use alpha_zero::{AgentModel, BoardState, MCTSExecutor};
 use atomic_float::AtomicF32;
-use environment::{Environment, GameStatus, Stone, Turn};
+use environment::{Environment, GameStatus, Stone};
 use mcts::{State, MCTS};
 use parking_lot::RwLock;
 use rand::{
@@ -200,27 +200,9 @@ impl Trainer {
                     let (z, is_terminal) = match env.place_stone(action).unwrap() {
                         GameStatus::InProgress => (0f32, false),
                         GameStatus::Draw => (0f32, true),
-                        GameStatus::BlackWin => (
-                            if env_before_action.turn == Turn::Black {
-                                1f32
-                            } else {
-                                -1f32
-                            },
-                            true,
-                        ),
-                        GameStatus::WhiteWin => (
-                            if env_before_action.turn == Turn::White {
-                                1f32
-                            } else {
-                                -1f32
-                            },
-                            true,
-                        ),
+                        GameStatus::BlackWin => (1f32, true),
+                        GameStatus::WhiteWin => (1f32, true),
                     };
-
-                    if self.replay_memory.len() == Self::REPLAY_MEMORY_SIZE {
-                        self.replay_memory.pop_front();
-                    }
 
                     self.replay_memory.push_back(Transition {
                         env: env_before_action,
@@ -241,7 +223,7 @@ impl Trainer {
                 let mut z = self.replay_memory.back().unwrap().z;
 
                 for index in 0..turn_count {
-                    let transition = &mut self.replay_memory[len - index - 1];
+                    let transition = &mut self.replay_memory[len - 1 - index];
                     transition.z = z;
                     z = -z;
                 }
@@ -349,6 +331,10 @@ impl Trainer {
                 }
 
                 self.replay_memory.extend(augmented_replay_memory);
+
+                while Self::REPLAY_MEMORY_SIZE < self.replay_memory.len() {
+                    self.replay_memory.pop_front();
+                }
             }
 
             println!();
