@@ -54,7 +54,7 @@ impl MCTSExecutor {
                         if node.state.is_terminal() {
                             // If the leaf node is terminal state, we don't need to expand it.
                             // Instead we perform backup from the leaf node.
-                            let sign = if node.state.env.turn == self.mcts.root().state.env.turn {
+                            let sign = if node.state.env.turn != self.mcts.root().state.env.turn {
                                 1f32
                             } else {
                                 -1f32
@@ -216,7 +216,7 @@ impl MCTSExecutor {
                         }
 
                         // Perform backup from the expanded child node.
-                        let sign = if node.state.env.turn == self.mcts.root().state.env.turn {
+                        let sign = if node.state.env.turn != self.mcts.root().state.env.turn {
                             1f32
                         } else {
                             -1f32
