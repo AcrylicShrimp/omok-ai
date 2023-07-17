@@ -407,4 +407,24 @@ mod test {
 
         assert_eq!(encoded, expected);
     }
+
+    #[test]
+    fn encoding_2() {
+        let mut env = Environment::new();
+        env.place_stone(0);
+        env.place_stone(10);
+        env.place_stone(2);
+        env.place_stone(30);
+
+        let mut encoded = [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE * 2];
+        env.encode_board(Turn::White, &mut encoded);
+
+        let mut expected = [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE * 2];
+        expected[0 * 2 + 1] = 1.0;
+        expected[10 * 2 + 0] = 1.0;
+        expected[2 * 2 + 1] = 1.0;
+        expected[30 * 2 + 0] = 1.0;
+
+        assert_eq!(encoded, expected);
+    }
 }
