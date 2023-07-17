@@ -59,6 +59,7 @@ where
 
             let new_root = unsafe { &mut *(root_children[children_index].ptr as *mut Node<S>) };
             new_root.parent = None;
+            new_root.flip_w();
             new_root as *mut Node<S>
         };
 
