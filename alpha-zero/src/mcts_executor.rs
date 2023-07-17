@@ -200,7 +200,8 @@ impl MCTSExecutor {
 
                         // Update the pre-expanded child node.
                         node.state.policy.write().copy_from_slice(p);
-                        node.state.z.store(reward, Ordering::Relaxed);
+
+                        // We don't update z here, because it will be updated during the backup phase.
 
                         // Update children's prior probability.
                         // This is required because every node after expanded are holding dummy prior probabilities.
