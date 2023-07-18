@@ -112,10 +112,34 @@ impl Trainer {
                 let mut mcts_executor = MCTSExecutor::new(MCTS::<BoardState>::new(BoardState {
                     env: env.clone(),
                     status: GameStatus::InProgress,
-                    policy: RwLock::new(
-                        [1f32 / (Environment::BOARD_SIZE * Environment::BOARD_SIZE) as f32;
-                            Environment::BOARD_SIZE * Environment::BOARD_SIZE],
-                    ),
+                    policy: RwLock::new({
+                        let mut input_tensor = Tensor::new(&[
+                            1,
+                            Environment::BOARD_SIZE as u64,
+                            Environment::BOARD_SIZE as u64,
+                            2,
+                        ]);
+
+                        env.encode_board(env.turn, &mut input_tensor[..]);
+
+                        // Prepare the evaluation run arguments.
+                        let mut eval_run_args = SessionRunArgs::new();
+                        eval_run_args.add_feed(&self.agent.op_input, 0, &input_tensor);
+                        eval_run_args.add_target(&self.agent.op_p_output);
+                        eval_run_args.add_target(&self.agent.op_v_output);
+
+                        let p_fetch_token = eval_run_args.request_fetch(&self.agent.op_p_output, 0);
+
+                        // Evaluate the network.
+                        self.session.run(&mut eval_run_args)?;
+
+                        let p = eval_run_args.fetch::<f32>(p_fetch_token)?;
+                        let mut policy = [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
+
+                        policy[..].copy_from_slice(&p[..]);
+
+                        policy
+                    }),
                     z: AtomicF32::new(0f32),
                 }));
                 let mut turn_count = 0usize;
@@ -482,10 +506,33 @@ impl Trainer {
         let mut mcts_executor = MCTSExecutor::new(MCTS::<BoardState>::new(BoardState {
             env: env.clone(),
             status: GameStatus::InProgress,
-            policy: RwLock::new(
-                [1f32 / (Environment::BOARD_SIZE * Environment::BOARD_SIZE) as f32;
-                    Environment::BOARD_SIZE * Environment::BOARD_SIZE],
-            ),
+            policy: RwLock::new({
+                let mut input_tensor = Tensor::new(&[
+                    1,
+                    Environment::BOARD_SIZE as u64,
+                    Environment::BOARD_SIZE as u64,
+                    2,
+                ]);
+
+                env.encode_board(env.turn, &mut input_tensor[..]);
+
+                // Prepare the evaluation run arguments.
+                let mut eval_run_args = SessionRunArgs::new();
+                eval_run_args.add_feed(&self.agent.op_input, 0, &input_tensor);
+                eval_run_args.add_target(&self.agent.op_p_output);
+                eval_run_args.add_target(&self.agent.op_v_output);
+
+                let p_fetch_token = eval_run_args.request_fetch(&self.agent.op_p_output, 0);
+
+                // Evaluate the network.
+                self.session.run(&mut eval_run_args)?;
+
+                let p = eval_run_args.fetch::<f32>(p_fetch_token)?;
+                let mut policy = [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
+
+                policy[..].copy_from_slice(&p[..]);
+                policy
+            }),
             z: AtomicF32::new(0f32),
         }));
 
