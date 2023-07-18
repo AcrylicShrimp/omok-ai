@@ -30,7 +30,8 @@ impl Network {
     pub const V_CONV_CHANNELS: i64 = 1;
     pub const V_CONV_STRIDE: i64 = 1;
 
-    pub const V_FLATTEN_SIZE: i64 = 225;
+    pub const V_FLATTEN_SIZE: i64 =
+        Environment::BOARD_SIZE as i64 * Environment::BOARD_SIZE as i64 * Self::V_CONV_CHANNELS;
 
     pub const V_FC0_SIZE: i64 = 256;
     pub const V_FC1_SIZE: i64 = 256;
@@ -41,7 +42,7 @@ impl Network {
     pub const P_CONV_STRIDE: i64 = 1;
 
     pub const P_FLATTEN_SIZE: i64 =
-        Environment::BOARD_SIZE as i64 * Environment::BOARD_SIZE as i64 * 64;
+        Environment::BOARD_SIZE as i64 * Environment::BOARD_SIZE as i64 * Self::P_CONV_CHANNELS;
 
     pub const P_FC0_SIZE: i64 = 256;
     pub const P_FC1_SIZE: i64 = Environment::BOARD_SIZE as i64 * Environment::BOARD_SIZE as i64;
