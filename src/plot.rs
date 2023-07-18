@@ -3,7 +3,12 @@ use plotters::{
     prelude::*,
     style::{AsRelative, WHITE},
 };
-use std::{collections::VecDeque, fs::File, path::Path};
+use std::{
+    collections::VecDeque, 
+    fs::File, 
+    path::Path, 
+    fs::create_dir_all,
+};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -36,7 +41,12 @@ impl Plotter {
     }
 
     pub fn save(&self, path: impl AsRef<Path>) -> Result<(), PlotError> {
-        let file = File::create(path)?;
+        let path_base = Path::new("plots");
+        if !path_base.exists() {
+            create_dir_all(path_base)?;
+        }
+        let path_file = path_base.join(path);
+        let file = File::create(path_file)?;
         serialize_into(file, &self.losses)?;
         Ok(())
     }

@@ -74,7 +74,7 @@ impl Trainer {
 
         let mut plotter = Plotter::new();
         if Path::new("plots").join("losses").exists() {
-            plotter.load("plots/losses").unwrap();
+            plotter.load("losses").unwrap();
         }
 
         let this = Self {
@@ -475,8 +475,8 @@ impl Trainer {
             );
 
             self.plotter.add_loss((v_loss, p_loss, loss));
-            self.plotter.save("plots/losses").unwrap();
-            self.plotter.draw_plot("plots/loss.svg");
+            self.plotter.save("losses").unwrap();
+            self.plotter.draw_plot("loss.svg");
 
             self.save(Self::MODEL_NAME);
             println!("[iter={}] Model saved.", iteration + 1);
