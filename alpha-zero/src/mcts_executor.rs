@@ -17,7 +17,7 @@ pub struct MCTSExecutor {
 }
 
 impl MCTSExecutor {
-    pub const NN_EVALUATION_BATCH_SIZE: usize = 1;
+    pub const NN_EVALUATION_BATCH_SIZE: usize = 16;
 
     pub const C_PUCT: f32 = 1.0;
     pub const V_LOSS: f32 = 0.1;

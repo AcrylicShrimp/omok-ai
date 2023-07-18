@@ -50,11 +50,11 @@ impl Trainer {
 
     pub const REPLAY_MEMORY_SIZE: usize = 600_000;
     pub const EPISODE_COUNT: usize = 50;
-    pub const EVALUATE_COUNT: usize = batched!(800);
+    pub const EVALUATE_COUNT: usize = batched!(600);
     pub const TRAINING_COUNT: usize = 600;
     pub const BATCH_SIZE: usize = 128;
 
-    pub const TEST_EVALUATE_COUNT: usize = batched!(800);
+    pub const TEST_EVALUATE_COUNT: usize = batched!(600);
 
     pub const TEMPERATURE: f32 = 1.0;
     pub const TEMPERATURE_THRESHOLD: usize = 30;
@@ -152,6 +152,28 @@ impl Trainer {
                         Self::EVALUATE_COUNT,
                     )?;
 
+                    // println!("");
+                    // println!(
+                    //     "children: {}",
+                    //     mcts_executor.mcts.root().children.read().len()
+                    // );
+
+                    // for node in mcts_executor.mcts.root().children.read().iter() {
+                    //     println!(
+                    //         "[action: {}] n: {}, w: {}, p: {}, q_s_a: {}",
+                    //         node.action.unwrap(),
+                    //         node.n.load(Ordering::Relaxed),
+                    //         node.w.load(Ordering::Relaxed),
+                    //         node.p.load(Ordering::Relaxed),
+                    //         {
+                    //             let n = node.n.load(Ordering::Relaxed);
+                    //             let q_s_a = node.w.load(Ordering::Relaxed) as f32
+                    //                 / (n as f32 + f32::EPSILON);
+                    //             q_s_a
+                    //         },
+                    //     );
+                    // }
+
                     // Get the policy from the root node. Policy is the visit count of the children.
                     let mut policy = {
                         let root = mcts_executor.mcts.root();
@@ -202,6 +224,8 @@ impl Trainer {
                             .unwrap()
                             .0
                     };
+
+                    // println!("[{} turn={}] action: {}", env.turn, turn_count + 1, action);
 
                     turn_count += 1;
 

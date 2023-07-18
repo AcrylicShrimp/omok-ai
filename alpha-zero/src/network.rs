@@ -21,10 +21,10 @@ impl Network {
     pub const INPUT_CHANNELS: i64 = 2;
 
     pub const RESIDUAL_FILTER_SIZE: i64 = 3;
-    pub const RESIDUAL_CHANNELS: i64 = 256;
-    pub const RESIDUAL_MIDDLE_CHANNELS: i64 = 64;
+    pub const RESIDUAL_CHANNELS: i64 = 128;
+    pub const RESIDUAL_MIDDLE_CHANNELS: i64 = 32;
     pub const RESIDUAL_STRIDE: i64 = 1;
-    pub const RESIDUAL_COUNT: i64 = 9;
+    pub const RESIDUAL_COUNT: i64 = 7;
 
     pub const V_CONV_FILTER_SIZE: i64 = 1;
     pub const V_CONV_CHANNELS: i64 = 1;
@@ -33,18 +33,18 @@ impl Network {
     pub const V_FLATTEN_SIZE: i64 =
         Environment::BOARD_SIZE as i64 * Environment::BOARD_SIZE as i64 * Self::V_CONV_CHANNELS;
 
-    pub const V_FC0_SIZE: i64 = 256;
-    pub const V_FC1_SIZE: i64 = 256;
+    pub const V_FC0_SIZE: i64 = 128;
+    pub const V_FC1_SIZE: i64 = 128;
     pub const V_FC2_SIZE: i64 = 1;
 
     pub const P_CONV_FILTER_SIZE: i64 = 1;
-    pub const P_CONV_CHANNELS: i64 = 64;
+    pub const P_CONV_CHANNELS: i64 = 32;
     pub const P_CONV_STRIDE: i64 = 1;
 
     pub const P_FLATTEN_SIZE: i64 =
         Environment::BOARD_SIZE as i64 * Environment::BOARD_SIZE as i64 * Self::P_CONV_CHANNELS;
 
-    pub const P_FC0_SIZE: i64 = 256;
+    pub const P_FC0_SIZE: i64 = 128;
     pub const P_FC1_SIZE: i64 = Environment::BOARD_SIZE as i64 * Environment::BOARD_SIZE as i64;
     pub const P_OUTPUT_SIZE: i64 = Environment::BOARD_SIZE as i64;
 
