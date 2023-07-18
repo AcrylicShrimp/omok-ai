@@ -74,7 +74,7 @@ impl Trainer {
 
         let mut plotter = Plotter::new();
         if Path::new("plots").join("losses").exists() {
-            plotter.load("plots/losses").unwrap();
+            plotter.load("losses").unwrap();
         }
 
         let this = Self {
@@ -475,8 +475,8 @@ impl Trainer {
             );
 
             self.plotter.add_loss((v_loss, p_loss, loss));
-            self.plotter.save("plots/losses").unwrap();
-            self.plotter.draw_plot("plots/loss.svg");
+            self.plotter.save("losses").unwrap();
+            self.plotter.draw_plot("loss.svg");
 
             self.save(Self::MODEL_NAME);
             println!("[iter={}] Model saved.", iteration + 1);
@@ -696,23 +696,23 @@ impl Trainer {
     }
 
     pub fn save(&self, name: impl AsRef<Path>) {
-        let path = Path::new("saves").join(name);
-
-        if path.exists() {
-            if path.is_dir() {
-                remove_dir_all(&path).unwrap();
-            } else {
-                remove_file(&path).unwrap();
+        let path_base = Path::new("saves");
+        let path_model = path_base.join(name);
+        if path_base.exists() {
+            if path_model.exists() {
+                if path_model.is_dir() {
+                    remove_dir_all(&path_model).unwrap();
+                } else {
+                    remove_file(&path_model).unwrap();
+                }
             }
-        } else {
-            let base = path.parent().unwrap();
-
-            if !base.exists() {
-                create_dir_all(&base).unwrap();
+        }else {
+            if !path_base.exists() {
+                create_dir_all(path_base).unwrap();
             }
         }
 
-        self.agent.io.save(&self.session, &path).unwrap();
+        self.agent.io.save(&self.session, &path_model).unwrap();
     }
 
     pub fn load(&self, name: impl AsRef<Path>) {
