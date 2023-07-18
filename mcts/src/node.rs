@@ -103,17 +103,6 @@ where
             }
         }
     }
-
-    pub fn flip_w(&self) {
-        self.w
-            .store(-self.w.load(Ordering::Relaxed), Ordering::Relaxed);
-
-        let children = self.children.read();
-
-        for child in children.iter() {
-            child.flip_w();
-        }
-    }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

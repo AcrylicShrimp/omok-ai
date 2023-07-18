@@ -2,6 +2,8 @@ mod bump_allocator;
 mod node;
 mod state;
 
+use std::sync::atomic::Ordering;
+
 pub use bump_allocator::*;
 pub use node::*;
 pub use state::*;
@@ -59,7 +61,15 @@ where
 
             let new_root = unsafe { &mut *(root_children[children_index].ptr as *mut Node<S>) };
             new_root.parent = None;
-            new_root.flip_w();
+
+            let new_n = new_root
+                .children
+                .read()
+                .iter()
+                .map(|child| child.n.load(Ordering::Relaxed))
+                .sum::<u64>();
+            new_root.n.store(new_n, Ordering::Relaxed);
+
             new_root as *mut Node<S>
         };
 
