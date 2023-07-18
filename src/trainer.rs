@@ -2,7 +2,7 @@ use crate::{
     plot::Plotter,
     utils::{flip_horizontal, flip_vertical, rotate_180, rotate_270, rotate_90},
 };
-use alpha_zero::{AgentModel, BoardState, MCTSExecutor, ParallelMCTSExecutor};
+use alpha_zero::{AgentModel, BoardState, ParallelMCTSExecutor};
 use atomic_float::AtomicF32;
 use environment::{Environment, GameStatus, Stone};
 use mcts::{State, MCTS};
@@ -10,7 +10,6 @@ use parking_lot::RwLock;
 use rand::{
     distributions::WeightedIndex, prelude::Distribution, seq::IteratorRandom, thread_rng, Rng,
 };
-use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::{
     collections::VecDeque,
     fs::{create_dir_all, remove_dir_all, remove_file},
@@ -80,7 +79,6 @@ impl Trainer {
     }
 
     pub fn train(&mut self, iteration_count: usize) -> Result<(), Status> {
-        let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let parallel_mcts_executor = ParallelMCTSExecutor::new();
         let mut rng = thread_rng();
         let mut recent_losses = VecDeque::with_capacity(100);
@@ -470,35 +468,15 @@ impl Trainer {
                     iteration + 1
                 );
 
-                let mut win = 0;
-                let mut lose = 0;
-                let mut draw = 0;
-
-                for game in 0..100 {
-                    print!(
-                        "\r[iter={}] Playing... [game={}/{}]",
-                        iteration + 1,
-                        game + 1,
-                        100
-                    );
-                    std::io::stdout().flush().unwrap();
-
-                    let result = self.play_against_random_player(&thread_pool)?;
-                    if result == 1 {
-                        win += 1;
-                    } else if result == -1 {
-                        lose += 1;
-                    } else {
-                        draw += 1;
-                    }
-                }
+                let (black_win, white_win, draw) =
+                    self.play_against_random_player(100, &parallel_mcts_executor)?;
 
                 println!();
                 println!(
                     "[iter={}] Win: {}, Lose: {}, Draw: {}",
                     iteration + 1,
-                    win,
-                    lose,
+                    black_win,
+                    white_win,
                     draw
                 );
             }
@@ -507,10 +485,21 @@ impl Trainer {
         Ok(())
     }
 
-    fn play_against_random_player(&self, thread_pool: &ThreadPool) -> Result<i32, Status> {
+    fn play_against_random_player(
+        &self,
+        episode_count: usize,
+        parallel_mcts_executor: &ParallelMCTSExecutor,
+    ) -> Result<(u32, u32, u32), Status> {
         let mut rng = thread_rng();
-        let mut env = Environment::new();
-        let mut mcts_executor = MCTSExecutor::new(MCTS::<BoardState>::new(BoardState {
+        let mut black_win = 0u32;
+        let mut white_win = 0u32;
+        let mut draw = 0u32;
+        let mut finished_episode_count = 0usize;
+        let mut env_list = vec![Environment::new(); episode_count];
+        let mut mcts_list = Vec::with_capacity(episode_count);
+
+        for env in &env_list {
+            mcts_list.push(MCTS::<BoardState>::new(BoardState {
             env: env.clone(),
             status: GameStatus::InProgress,
             policy: RwLock::new({
@@ -538,21 +527,29 @@ impl Trainer {
                 let mut policy = [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
 
                 policy[..].copy_from_slice(&p[..]);
+
                 policy
             }),
             z: AtomicF32::new(0f32),
         }));
+        }
 
-        loop {
-            mcts_executor.run(
-                thread_pool,
-                &self.agent,
-                &self.session,
+        while finished_episode_count < episode_count {
+            parallel_mcts_executor.execute(
                 Self::TEST_EVALUATE_COUNT,
+                Self::EVALUATE_BATCH_SIZE,
+                &self.session,
+                &self.agent,
+                &mcts_list,
             )?;
 
+            for (env, mcts) in env_list.iter_mut().zip(mcts_list.iter_mut()) {
+                if mcts.root().state.status.is_terminal() {
+                    continue;
+                }
+
             let (children_index, best_action) = {
-                let children = mcts_executor.mcts.root().children.read();
+                    let children = mcts.root().children.read();
                 let (index, node) = children
                     .iter()
                     .enumerate()
@@ -564,41 +561,35 @@ impl Trainer {
                 (index, node.action.unwrap())
             };
 
+                mcts.transition(children_index);
+
             match env.place_stone(best_action).unwrap() {
                 GameStatus::InProgress => {}
                 GameStatus::Draw => {
-                    return Ok(0);
+                        draw += 1;
+                        finished_episode_count += 1;
+                        continue;
                 }
                 GameStatus::BlackWin => {
-                    return Ok(1);
+                        black_win += 1;
+                        finished_episode_count += 1;
+                        continue;
                 }
                 GameStatus::WhiteWin => {
-                    return Ok(1);
+                        white_win += 1;
+                        finished_episode_count += 1;
+                        continue;
+                    }
                 }
-            }
-
-            mcts_executor.mcts.transition(children_index);
 
             let legal_moves = (0..Environment::BOARD_SIZE * Environment::BOARD_SIZE)
                 .filter(|&action| env.board[action] == Stone::Empty)
                 .collect::<Vec<_>>();
             let random_move = legal_moves[rng.gen_range(0..legal_moves.len())];
-
-            match env.place_stone(random_move).unwrap() {
-                GameStatus::InProgress => {}
-                GameStatus::Draw => {
-                    return Ok(0);
-                }
-                GameStatus::BlackWin => {
-                    return Ok(-1);
-                }
-                GameStatus::WhiteWin => {
-                    return Ok(-1);
-                }
-            }
+                let status = env.place_stone(random_move).unwrap();
 
             let has_random_move_children = {
-                let children = mcts_executor.mcts.root().children.read();
+                    let children = mcts.root().children.read();
                 children.iter().any(|node| node.action == Some(random_move))
             };
             if !has_random_move_children {
@@ -609,10 +600,7 @@ impl Trainer {
                     Environment::BOARD_SIZE as u64,
                     2,
                 ]);
-                mcts_executor.mcts.root().state.env.encode_board(
-                    mcts_executor.mcts.root().state.env.turn,
-                    &mut board_tensor[..],
-                );
+                    env.encode_board(env.turn.opponent(), &mut board_tensor[..]);
 
                 // Evaluate the NN with the child state to get the policy and value.
                 let mut eval_run_args = SessionRunArgs::new();
@@ -634,7 +622,7 @@ impl Trainer {
                 // Filter out illegal actions.
                 pi[random_move] = 0.0;
                 for action in 0..Environment::BOARD_SIZE * Environment::BOARD_SIZE {
-                    if !mcts_executor.mcts.root().state.is_available_action(action) {
+                        if !mcts.root().state.is_available_action(action) {
                         pi[action] = 0.0;
                     }
                 }
@@ -648,12 +636,12 @@ impl Trainer {
                 }
 
                 // Make the child node.
-                match mcts_executor.mcts.expand(
-                    mcts_executor.mcts.root(),
+                    match mcts.expand(
+                        mcts.root(),
                     random_move,
                     BoardState {
                         env: env.clone(),
-                        status: GameStatus::InProgress,
+                            status,
                         policy: RwLock::new(pi),
                         z: AtomicF32::new(v[0]),
                     },
@@ -667,15 +655,37 @@ impl Trainer {
             }
 
             let children_index = {
-                let children = mcts_executor.mcts.root().children.read();
+                    let children = mcts.root().children.read();
                 children
                     .iter()
                     .position(|node| node.action == Some(random_move))
                     .unwrap()
             };
 
-            mcts_executor.mcts.transition(children_index);
+                mcts.transition(children_index);
+
+                match status {
+                    GameStatus::InProgress => {}
+                    GameStatus::Draw => {
+                        draw += 1;
+                        finished_episode_count += 1;
+                        continue;
+                    }
+                    GameStatus::BlackWin => {
+                        black_win += 1;
+                        finished_episode_count += 1;
+                        continue;
+                    }
+                    GameStatus::WhiteWin => {
+                        white_win += 1;
+                        finished_episode_count += 1;
+                        continue;
+                    }
+                }
+            }
         }
+
+        Ok((black_win, white_win, draw))
     }
 
     pub fn save(&self, name: impl AsRef<Path>) {
