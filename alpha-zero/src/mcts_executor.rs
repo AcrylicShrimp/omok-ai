@@ -1,7 +1,7 @@
 use super::{mcts_node::BoardState, AgentModel};
 use atomic_float::AtomicF32;
 use bitvec::vec::BitVec;
-use environment::{Environment, Stone};
+use environment::{Environment, GameStatus, Stone};
 use mcts::{Node, NodePtr, State, MCTS};
 use parking_lot::RwLock;
 use rand::{seq::SliceRandom, thread_rng};
@@ -54,12 +54,7 @@ impl MCTSExecutor {
                         if node.state.is_terminal() {
                             // If the leaf node is terminal state, we don't need to expand it.
                             // Instead we perform backup from the leaf node.
-                            let sign = if node.state.env.turn != self.mcts.root().state.env.turn {
-                                1f32
-                            } else {
-                                -1f32
-                            };
-                            node.propagate(sign * node.state.z.load(Ordering::Relaxed));
+                            node.propagate(node.state.z.load(Ordering::Relaxed));
                             node.v_loss.fetch_sub(1, Ordering::Relaxed);
                             continue;
                         }
@@ -97,10 +92,11 @@ impl MCTSExecutor {
                         // Place the stone.
                         let mut env = node.state.env.clone();
                         let status = env.place_stone(action).unwrap();
-                        let terminal_reward = if status.is_terminal() {
-                            Some(1f32)
-                        } else {
-                            None
+                        let terminal_reward = match status {
+                            GameStatus::InProgress => None,
+                            GameStatus::Draw => Some(0f32),
+                            GameStatus::BlackWin => Some(1f32),
+                            GameStatus::WhiteWin => Some(1f32),
                         };
 
                         // Pre-compute policy.
@@ -168,7 +164,7 @@ impl MCTSExecutor {
                     for (batch_index, request) in requests.iter().enumerate() {
                         let env = &request.node.state.env;
                         env.encode_board(
-                            env.turn,
+                            env.turn.opponent(),
                             &mut input_tensor[batch_index
                                 * Environment::BOARD_SIZE
                                 * Environment::BOARD_SIZE
@@ -216,12 +212,7 @@ impl MCTSExecutor {
                         }
 
                         // Perform backup from the expanded child node.
-                        let sign = if node.state.env.turn != self.mcts.root().state.env.turn {
-                            1f32
-                        } else {
-                            -1f32
-                        };
-                        node.propagate(sign * reward);
+                        node.propagate(reward);
                     }
 
                     Ok(())
