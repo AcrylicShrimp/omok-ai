@@ -457,7 +457,7 @@ impl Trainer {
 
             self.plotter.add_loss((v_loss, p_loss, loss));
             self.plotter.save("losses").unwrap();
-            self.plotter.draw_plot("loss.svg");
+            self.plotter.draw_plot("plots/loss.svg");
 
             self.save(Self::MODEL_NAME);
             println!("[iter={}] Model saved.", iteration + 1);
