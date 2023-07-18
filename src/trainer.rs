@@ -232,6 +232,9 @@ impl Trainer {
                         z,
                     });
 
+                    // Re-root the tree.
+                    mcts.transition(children_index);
+
                     if is_terminal {
                         finished_episode_count += 1;
                         print!(
@@ -243,9 +246,6 @@ impl Trainer {
                         std::io::stdout().flush().unwrap();
                         continue;
                     }
-
-                    // The game is continued. Re-root the tree.
-                    mcts.transition(children_index);
                 }
             }
 
