@@ -145,10 +145,7 @@ impl Environment {
             );
 
         let turn = self.turn;
-        self.turn = match self.turn {
-            Turn::Black => Turn::White,
-            Turn::White => Turn::Black,
-        };
+        self.turn = self.turn.opponent();
 
         Some(
             if horizontal_count == Self::SERIAL_STONE_COUNT
