@@ -74,7 +74,7 @@ impl Trainer {
 
         let mut plotter = Plotter::new();
         if Path::new("plots").join("losses").exists() {
-            plotter.load("losses").unwrap();
+            plotter.load("plots/losses").unwrap();
         }
 
         let this = Self {
@@ -706,7 +706,7 @@ impl Trainer {
                     remove_file(&path_model).unwrap();
                 }
             }
-        }else {
+        } else {
             if !path_base.exists() {
                 create_dir_all(path_base).unwrap();
             }
