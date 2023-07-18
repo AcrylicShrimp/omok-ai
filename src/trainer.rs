@@ -2,7 +2,7 @@ use crate::{
     plot::Plotter,
     utils::{flip_horizontal, flip_vertical, rotate_180, rotate_270, rotate_90},
 };
-use alpha_zero::{AgentModel, BoardState, MCTSExecutor};
+use alpha_zero::{AgentModel, BoardState, MCTSExecutor, ParallelMCTSExecutor};
 use atomic_float::AtomicF32;
 use environment::{Environment, GameStatus, Stone};
 use mcts::{State, MCTS};
@@ -33,28 +33,17 @@ pub struct Trainer {
     pub replay_memory: VecDeque<Transition>,
 }
 
-macro_rules! batched {
-    ($expr:expr) => {
-        if $expr / MCTSExecutor::NN_EVALUATION_BATCH_SIZE * MCTSExecutor::NN_EVALUATION_BATCH_SIZE
-            == $expr
-        {
-            $expr / MCTSExecutor::NN_EVALUATION_BATCH_SIZE
-        } else {
-            $expr / MCTSExecutor::NN_EVALUATION_BATCH_SIZE + 1
-        }
-    };
-}
-
 impl Trainer {
     pub const MODEL_NAME: &'static str = "alpha-zero";
 
     pub const REPLAY_MEMORY_SIZE: usize = 600_000;
     pub const EPISODE_COUNT: usize = 50;
-    pub const EVALUATE_COUNT: usize = batched!(600);
+    pub const EVALUATE_COUNT: usize = 600;
+    pub const EVALUATE_BATCH_SIZE: usize = 16;
     pub const TRAINING_COUNT: usize = 600;
-    pub const BATCH_SIZE: usize = 128;
+    pub const TRAINING_BATCH_SIZE: usize = 128;
 
-    pub const TEST_EVALUATE_COUNT: usize = batched!(600);
+    pub const TEST_EVALUATE_COUNT: usize = 800;
 
     pub const TEMPERATURE: f32 = 1.0;
     pub const TEMPERATURE_THRESHOLD: usize = 30;
@@ -92,6 +81,7 @@ impl Trainer {
 
     pub fn train(&mut self, iteration_count: usize) -> Result<(), Status> {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+        let parallel_mcts_executor = ParallelMCTSExecutor::new();
         let mut rng = thread_rng();
         let mut recent_losses = VecDeque::with_capacity(100);
 
@@ -99,17 +89,14 @@ impl Trainer {
             println!("========================================");
             println!("[iter={}] Entering self-play phase.", iteration + 1);
 
-            for episode in 0..Self::EPISODE_COUNT {
-                print!(
-                    "\r[iter={}] Self-playing... [episode={}/{}]",
-                    iteration + 1,
-                    episode + 1,
-                    Self::EPISODE_COUNT
-                );
-                std::io::stdout().flush().unwrap();
+            let mut finished_episode_count = 0usize;
+            let mut env_list = vec![Environment::new(); Self::EPISODE_COUNT];
+            let mut mcts_list = Vec::with_capacity(Self::EPISODE_COUNT);
+            let mut turn_count_list = vec![0; Self::EPISODE_COUNT];
+            let mut transition_list = Vec::with_capacity(Self::EPISODE_COUNT);
 
-                let mut env = Environment::new();
-                let mut mcts_executor = MCTSExecutor::new(MCTS::<BoardState>::new(BoardState {
+            for env in &env_list {
+                mcts_list.push(MCTS::<BoardState>::new(BoardState {
                     env: env.clone(),
                     status: GameStatus::InProgress,
                     policy: RwLock::new({
@@ -142,41 +129,33 @@ impl Trainer {
                     }),
                     z: AtomicF32::new(0f32),
                 }));
-                let mut turn_count = 0usize;
+                transition_list.push(Vec::with_capacity(64));
+            }
 
-                loop {
-                    mcts_executor.run(
-                        &thread_pool,
-                        &self.agent,
-                        &self.session,
-                        Self::EVALUATE_COUNT,
-                    )?;
+            while finished_episode_count < Self::EPISODE_COUNT {
+                let time = std::time::Instant::now();
+                parallel_mcts_executor.execute(
+                    Self::EVALUATE_COUNT,
+                    Self::EVALUATE_BATCH_SIZE,
+                    &self.session,
+                    &self.agent,
+                    &mcts_list,
+                )?;
+                let elapsed = time.elapsed().as_secs_f32();
+                println!("elapsed: {:.2}s", elapsed);
 
-                    // println!("");
-                    // println!(
-                    //     "children: {}",
-                    //     mcts_executor.mcts.root().children.read().len()
-                    // );
-
-                    // for node in mcts_executor.mcts.root().children.read().iter() {
-                    //     println!(
-                    //         "[action: {}] n: {}, w: {}, p: {}, q_s_a: {}",
-                    //         node.action.unwrap(),
-                    //         node.n.load(Ordering::Relaxed),
-                    //         node.w.load(Ordering::Relaxed),
-                    //         node.p.load(Ordering::Relaxed),
-                    //         {
-                    //             let n = node.n.load(Ordering::Relaxed);
-                    //             let q_s_a = node.w.load(Ordering::Relaxed) as f32
-                    //                 / (n as f32 + f32::EPSILON);
-                    //             q_s_a
-                    //         },
-                    //     );
-                    // }
+                for (env, (mcts, (turn_count, transitions))) in env_list.iter_mut().zip(
+                    mcts_list
+                        .iter_mut()
+                        .zip(turn_count_list.iter_mut().zip(transition_list.iter_mut())),
+                ) {
+                    if mcts.root().state.status.is_terminal() {
+                        continue;
+                    }
 
                     // Get the policy from the root node. Policy is the visit count of the children.
                     let mut policy = {
-                        let root = mcts_executor.mcts.root();
+                        let root = mcts.root();
                         let children = root.children.read();
                         let mut policy = [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
 
@@ -196,7 +175,7 @@ impl Trainer {
                         }
                     }
 
-                    let action = if turn_count < Self::TEMPERATURE_THRESHOLD {
+                    let action = if *turn_count < Self::TEMPERATURE_THRESHOLD {
                         // Apply Boltzmann exploration.
                         let inv_tau = Self::TEMPERATURE.recip();
 
@@ -225,12 +204,10 @@ impl Trainer {
                             .0
                     };
 
-                    // println!("[{} turn={}] action: {}", env.turn, turn_count + 1, action);
-
-                    turn_count += 1;
+                    *turn_count += 1;
 
                     let children_index = {
-                        let children = mcts_executor.mcts.root().children.read();
+                        let children = mcts.root().children.read();
                         let (index, _) = children
                             .iter()
                             .enumerate()
@@ -252,26 +229,34 @@ impl Trainer {
                         GameStatus::WhiteWin => (1f32, true),
                     };
 
-                    self.replay_memory.push_back(Transition {
+                    transitions.push(Transition {
                         env: env_before_action,
                         policy,
                         z,
                     });
 
                     if is_terminal {
-                        break;
+                        finished_episode_count += 1;
+                        print!(
+                            "\r[iter={}] Self-playing... [episode={}/{}]",
+                            iteration + 1,
+                            finished_episode_count,
+                            Self::EPISODE_COUNT
+                        );
+                        std::io::stdout().flush().unwrap();
+                        continue;
                     }
 
                     // The game is continued. Re-root the tree.
-                    mcts_executor.mcts.transition(children_index);
+                    mcts.transition(children_index);
                 }
+            }
 
-                // Update z in the game history, so that the agent can learn from it.
-                let len = self.replay_memory.len();
-                let mut z = self.replay_memory.back().unwrap().z;
+            // Update z in the game history, so that the agent can learn from it.
+            for mut transitions in transition_list.into_iter() {
+                let mut z = transitions.last().unwrap().z;
 
-                for index in 0..turn_count {
-                    let transition = &mut self.replay_memory[len - 1 - index];
+                for transition in transitions.iter_mut().rev() {
                     transition.z = z;
                     z = -z;
                 }
@@ -279,9 +264,9 @@ impl Trainer {
                 // Augment the replay memory, by rotating and flipping the board.
                 // We can generate extra 5 boards from one board.
                 // 3 from rotation, and 2 from flipping.
-                let mut augmented_replay_memory = Vec::with_capacity(turn_count * 5);
+                let mut augmented_replay_memory = Vec::with_capacity(transitions.len() * 5);
 
-                for transition in self.replay_memory.iter().rev().take(turn_count) {
+                for transition in transitions.iter() {
                     augmented_replay_memory.push(Transition {
                         env: {
                             let mut env = transition.env.clone();
@@ -378,11 +363,12 @@ impl Trainer {
                     });
                 }
 
+                self.replay_memory.extend(transitions);
                 self.replay_memory.extend(augmented_replay_memory);
+            }
 
-                while Self::REPLAY_MEMORY_SIZE < self.replay_memory.len() {
-                    self.replay_memory.pop_front();
-                }
+            while Self::REPLAY_MEMORY_SIZE < self.replay_memory.len() {
+                self.replay_memory.pop_front();
             }
 
             println!();
@@ -392,24 +378,24 @@ impl Trainer {
                 let transition = self
                     .replay_memory
                     .iter()
-                    .choose_multiple(&mut rng, Self::BATCH_SIZE);
+                    .choose_multiple(&mut rng, Self::TRAINING_BATCH_SIZE);
 
-                debug_assert!(transition.len() == Self::BATCH_SIZE);
+                debug_assert!(transition.len() == Self::TRAINING_BATCH_SIZE);
 
                 let mut tensor_input = Tensor::new(&[
-                    Self::BATCH_SIZE as u64,
+                    Self::TRAINING_BATCH_SIZE as u64,
                     Environment::BOARD_SIZE as u64,
                     Environment::BOARD_SIZE as u64,
                     2,
                 ]);
-                let mut tensor_z_input = Tensor::new(&[Self::BATCH_SIZE as u64, 1]);
+                let mut tensor_z_input = Tensor::new(&[Self::TRAINING_BATCH_SIZE as u64, 1]);
                 let mut tensor_pi_input = Tensor::new(&[
-                    Self::BATCH_SIZE as u64,
+                    Self::TRAINING_BATCH_SIZE as u64,
                     Environment::BOARD_SIZE as u64,
                     Environment::BOARD_SIZE as u64,
                 ]);
 
-                for batch_index in 0..Self::BATCH_SIZE {
+                for batch_index in 0..Self::TRAINING_BATCH_SIZE {
                     let transition = transition[batch_index];
 
                     transition.env.encode_board(
