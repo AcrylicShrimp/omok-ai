@@ -133,7 +133,6 @@ impl Trainer {
             }
 
             while finished_episode_count < Self::EPISODE_COUNT {
-                let time = std::time::Instant::now();
                 parallel_mcts_executor.execute(
                     Self::EVALUATE_COUNT,
                     Self::EVALUATE_BATCH_SIZE,
@@ -141,8 +140,6 @@ impl Trainer {
                     &self.agent,
                     &mcts_list,
                 )?;
-                let elapsed = time.elapsed().as_secs_f32();
-                println!("elapsed: {:.2}s", elapsed);
 
                 for (env, (mcts, (turn_count, transitions))) in env_list.iter_mut().zip(
                     mcts_list
