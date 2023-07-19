@@ -160,7 +160,8 @@ impl ParallelMCTSExecutor {
 
                 if requests.is_empty() {
                     // There's no request for now.
-                    return Ok(());
+                    // It can be happened when all leaf nodes are terminal state.
+                    continue;
                 }
 
                 // Prepare the input tensor.
