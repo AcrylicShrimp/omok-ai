@@ -66,6 +66,8 @@ impl ParallelMCTSExecutor {
                                 continue;
                             }
 
+                            // Select any possible action.
+                            // Since the leaf node doesn't have terminal state, we need to expand it.
                             let action = {
                                 let mut bits = BitVec::<usize>::repeat(
                                     false,
