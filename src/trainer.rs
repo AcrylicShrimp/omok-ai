@@ -494,7 +494,6 @@ impl Trainer {
         let mut black_win = 0u32;
         let mut white_win = 0u32;
         let mut draw = 0u32;
-        let mut finished_episode_count = 0usize;
         let mut env_list = vec![Environment::new(); episode_count];
         let mut mcts_list = Vec::with_capacity(episode_count);
 
@@ -534,7 +533,7 @@ impl Trainer {
         }));
         }
 
-        while finished_episode_count < episode_count {
+        while !env_list.is_empty() {
             parallel_mcts_executor.execute(
                 Self::TEST_EVALUATE_COUNT,
                 Self::EVALUATE_BATCH_SIZE,
@@ -543,10 +542,11 @@ impl Trainer {
                 &mcts_list,
             )?;
 
-            for (env, mcts) in env_list.iter_mut().zip(mcts_list.iter_mut()) {
-                if mcts.root().state.status.is_terminal() {
-                    continue;
-                }
+            let mut index = 0;
+
+            while index < env_list.len() {
+                let env = &mut env_list[index];
+                let mcts = &mut mcts_list[index];
 
             let (children_index, best_action) = {
                     let children = mcts.root().children.read();
@@ -561,32 +561,55 @@ impl Trainer {
                 (index, node.action.unwrap())
             };
 
-                mcts.transition(children_index);
-
-            match env.place_stone(best_action).unwrap() {
-                GameStatus::InProgress => {}
+                let is_terminal = match env.place_stone(best_action).unwrap() {
+                    GameStatus::InProgress => false,
                 GameStatus::Draw => {
                         draw += 1;
-                        finished_episode_count += 1;
-                        continue;
+                        true
                 }
                 GameStatus::BlackWin => {
                         black_win += 1;
-                        finished_episode_count += 1;
-                        continue;
+                        true
                 }
                 GameStatus::WhiteWin => {
                         white_win += 1;
-                        finished_episode_count += 1;
+                        true
+                    }
+                };
+
+                if is_terminal {
+                    env_list.swap_remove(index);
+                    mcts_list.swap_remove(index);
                         continue;
                     }
-                }
+
+                mcts.transition(children_index);
 
             let legal_moves = (0..Environment::BOARD_SIZE * Environment::BOARD_SIZE)
                 .filter(|&action| env.board[action] == Stone::Empty)
                 .collect::<Vec<_>>();
             let random_move = legal_moves[rng.gen_range(0..legal_moves.len())];
-                let status = env.place_stone(random_move).unwrap();
+                let is_terminal = match env.place_stone(random_move).unwrap() {
+                    GameStatus::InProgress => false,
+                    GameStatus::Draw => {
+                        draw += 1;
+                        true
+                    }
+                    GameStatus::BlackWin => {
+                        black_win += 1;
+                        true
+                    }
+                    GameStatus::WhiteWin => {
+                        white_win += 1;
+                        true
+                    }
+                };
+
+                if is_terminal {
+                    env_list.swap_remove(index);
+                    mcts_list.swap_remove(index);
+                    continue;
+                }
 
             let has_random_move_children = {
                     let children = mcts.root().children.read();
@@ -641,7 +664,7 @@ impl Trainer {
                     random_move,
                     BoardState {
                         env: env.clone(),
-                            status,
+                            status: GameStatus::InProgress,
                         policy: RwLock::new(pi),
                         z: AtomicF32::new(v[0]),
                     },
@@ -664,24 +687,7 @@ impl Trainer {
 
                 mcts.transition(children_index);
 
-                match status {
-                    GameStatus::InProgress => {}
-                    GameStatus::Draw => {
-                        draw += 1;
-                        finished_episode_count += 1;
-                        continue;
-                    }
-                    GameStatus::BlackWin => {
-                        black_win += 1;
-                        finished_episode_count += 1;
-                        continue;
-                    }
-                    GameStatus::WhiteWin => {
-                        white_win += 1;
-                        finished_episode_count += 1;
-                        continue;
-                    }
-                }
+                index += 1;
             }
         }
 
