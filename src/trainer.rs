@@ -130,7 +130,7 @@ impl Trainer {
                 transition_list.push(Vec::with_capacity(64));
             }
 
-            while finished_episode_count < Self::EPISODE_COUNT {
+            while !env_list.is_empty() {
                 parallel_mcts_executor.execute(
                     Self::EVALUATE_COUNT,
                     Self::EVALUATE_BATCH_SIZE,
@@ -139,14 +139,13 @@ impl Trainer {
                     &mcts_list,
                 )?;
 
-                for (env, (mcts, (turn_count, transitions))) in env_list.iter_mut().zip(
-                    mcts_list
-                        .iter_mut()
-                        .zip(turn_count_list.iter_mut().zip(transition_list.iter_mut())),
-                ) {
-                    if mcts.root().state.status.is_terminal() {
-                        continue;
-                    }
+                let mut index = 0;
+
+                while index < env_list.len() {
+                    let env = &mut env_list[index];
+                    let mcts = &mut mcts_list[index];
+                    let turn_count = &mut turn_count_list[index];
+                    let transitions = &mut transition_list[index];
 
                     // Get the policy from the root node. Policy is the visit count of the children.
                     let mut policy = {
@@ -230,11 +229,13 @@ impl Trainer {
                         z,
                     });
 
-                    // Re-root the tree.
-                    mcts.transition(children_index);
-
                     if is_terminal {
                         finished_episode_count += 1;
+
+                        env_list.swap_remove(index);
+                        mcts_list.swap_remove(index);
+                        turn_count_list.swap_remove(index);
+
                         print!(
                             "\r[iter={}] Self-playing... [episode={}/{}]",
                             iteration + 1,
@@ -242,8 +243,14 @@ impl Trainer {
                             Self::EPISODE_COUNT
                         );
                         std::io::stdout().flush().unwrap();
+
                         continue;
                     }
+
+                    // Re-root the tree.
+                    mcts.transition(children_index);
+
+                    index += 1;
                 }
             }
 
