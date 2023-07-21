@@ -3,7 +3,7 @@ use environment::Environment;
 use tensorflow::{
     ops::{add, constant, mean, reshape, square, sub, Placeholder},
     train::{AdadeltaOptimizer, MinimizeOptions, Optimizer},
-    DataType, Operation, Scope, Status, Variable,
+    DataType, Operation, Scope, Session, SessionRunArgs, Status, Tensor, Variable,
 };
 
 pub struct AgentModel {
@@ -100,6 +100,71 @@ impl AgentModel {
             variables,
             io,
         })
+    }
+
+    pub fn evaluate_p(&self, session: &Session, input: Tensor<f32>) -> Result<Tensor<f32>, Status> {
+        let mut run_args = SessionRunArgs::new();
+        run_args.add_feed(&self.op_input, 0, &input);
+        run_args.add_target(&self.op_p_output);
+
+        let p_fetch_token = run_args.request_fetch(&self.op_p_output, 0);
+        session.run(&mut run_args)?;
+
+        Ok(run_args.fetch(p_fetch_token)?)
+    }
+
+    pub fn evaluate_pv(
+        &self,
+        session: &Session,
+        input: Tensor<f32>,
+    ) -> Result<(Tensor<f32>, Tensor<f32>), Status> {
+        let mut run_args = SessionRunArgs::new();
+        run_args.add_feed(&self.op_input, 0, &input);
+        run_args.add_target(&self.op_p_output);
+        run_args.add_target(&self.op_v_output);
+
+        let p_fetch_token = run_args.request_fetch(&self.op_p_output, 0);
+        let v_fetch_token = run_args.request_fetch(&self.op_v_output, 0);
+        session.run(&mut run_args)?;
+
+        Ok((
+            run_args.fetch(p_fetch_token)?,
+            run_args.fetch(v_fetch_token)?,
+        ))
+    }
+
+    pub fn train(
+        &self,
+        session: &Session,
+        input: Tensor<f32>,
+        policy_target: Tensor<f32>,
+        value_target: Tensor<f32>,
+    ) -> Result<(f32, f32, f32), Status> {
+        let mut run_args = SessionRunArgs::new();
+        run_args.add_feed(&self.op_input, 0, &input);
+        run_args.add_feed(&self.op_pi_input, 0, &policy_target);
+        run_args.add_feed(&self.op_z_input, 0, &value_target);
+        run_args.add_target(&self.op_minimize);
+        session.run(&mut run_args)?;
+
+        let mut run_args = SessionRunArgs::new();
+        run_args.add_feed(&self.op_input, 0, &input);
+        run_args.add_feed(&self.op_pi_input, 0, &policy_target);
+        run_args.add_feed(&self.op_z_input, 0, &value_target);
+        run_args.add_target(&self.op_p_loss);
+        run_args.add_target(&self.op_v_loss);
+        run_args.add_target(&self.op_loss);
+
+        let p_loss_fetch_token = run_args.request_fetch(&self.op_p_loss, 0);
+        let v_loss_fetch_token = run_args.request_fetch(&self.op_v_loss, 0);
+        let loss_fetch_token = run_args.request_fetch(&self.op_loss, 0);
+        session.run(&mut run_args)?;
+
+        let p_loss = run_args.fetch::<f32>(p_loss_fetch_token)?;
+        let v_loss = run_args.fetch::<f32>(v_loss_fetch_token)?;
+        let loss = run_args.fetch::<f32>(loss_fetch_token)?;
+
+        Ok((p_loss[0], v_loss[0], loss[0]))
     }
 }
 

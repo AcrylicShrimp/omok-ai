@@ -1,13 +1,13 @@
-use crate::{AgentModel, BoardState};
+use crate::{encode_nn_input, Agent, AgentModel, BoardState, EnvTurnMode};
 use atomic_float::AtomicF32;
 use bitvec::vec::BitVec;
 use environment::{Environment, GameStatus, Stone};
-use mcts::{Node, NodePtr, State, MCTS};
+use mcts::{Node, NodePtr, State};
 use parking_lot::RwLock;
 use rand::prelude::*;
 use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use std::sync::atomic::Ordering;
-use tensorflow::{Session, SessionRunArgs, Status, Tensor};
+use tensorflow::{Session, Status};
 
 pub struct ParallelMCTSExecutor {
     thread_pool: ThreadPool,
@@ -26,9 +26,9 @@ impl ParallelMCTSExecutor {
         &self,
         count: usize,
         batch_size: usize,
+        agent_model: &AgentModel,
         session: &Session,
-        agent: &AgentModel,
-        mcts_list: &[MCTS<BoardState>],
+        agents: &[Agent],
     ) -> Result<(), Status> {
         self.thread_pool.install(|| {
             let mut processed_count = 0;
@@ -40,14 +40,14 @@ impl ParallelMCTSExecutor {
 
                 processed_count += batch_size;
 
-                let requests = mcts_list
+                let requests = agents
                     .par_iter()
-                    .flat_map(|mcts| {
+                    .flat_map(|agent| {
                         let mut rng = thread_rng();
                         let mut requests = Vec::with_capacity(batch_size);
 
                         for _ in 0..batch_size {
-                            let node = mcts.select_leaf(|parent, children| {
+                            let node = agent.mcts.select_leaf(|parent, children| {
                                 let parent_n = parent.n.load(Ordering::Relaxed);
                                 children
                                     .iter()
@@ -125,7 +125,7 @@ impl ParallelMCTSExecutor {
                             }
 
                             // Pre-expand the node.
-                            let expanded_child = match mcts.expand(
+                            let expanded_child = match agent.mcts.expand(
                                 node,
                                 action,
                                 BoardState {
@@ -164,62 +164,31 @@ impl ParallelMCTSExecutor {
                     continue;
                 }
 
-                // Prepare the input tensor.
-                let mut input_tensor = Tensor::new(&[
-                    requests.len() as u64,
-                    Environment::BOARD_SIZE as u64,
-                    Environment::BOARD_SIZE as u64,
-                    2,
-                ]);
-
-                // Encode the board state.
-                for (batch_index, request) in requests.iter().enumerate() {
-                    let env = &request.node.state.env;
-                    env.encode_board(
-                        env.turn.opponent(),
-                        &mut input_tensor[batch_index
-                            * Environment::BOARD_SIZE
-                            * Environment::BOARD_SIZE
-                            * 2
-                            ..(batch_index + 1)
-                                * Environment::BOARD_SIZE
-                                * Environment::BOARD_SIZE
-                                * 2],
-                    );
-                }
-
-                // Prepare the evaluation run arguments.
-                let mut eval_run_args = SessionRunArgs::new();
-                eval_run_args.add_feed(&agent.op_input, 0, &input_tensor);
-                eval_run_args.add_target(&agent.op_p_output);
-                eval_run_args.add_target(&agent.op_v_output);
-
-                let p_fetch_token = eval_run_args.request_fetch(&agent.op_p_output, 0);
-                let v_fetch_token = eval_run_args.request_fetch(&agent.op_v_output, 0);
-
-                // Evaluate the network.
-                session.run(&mut eval_run_args)?;
-
-                let p = eval_run_args.fetch::<f32>(p_fetch_token)?;
-                let v = eval_run_args.fetch::<f32>(v_fetch_token)?;
+                let input = encode_nn_input(
+                    requests.len(),
+                    EnvTurnMode::Opponent,
+                    requests.iter().map(|request| &request.node.state.env),
+                );
+                let (policy, value) = agent_model.evaluate_pv(session, input)?;
 
                 for (batch_index, request) in requests.iter().enumerate() {
                     let node = &*request.node;
-                    let p = &p[batch_index * (Environment::BOARD_SIZE * Environment::BOARD_SIZE)
+                    let policy = &policy[batch_index
+                        * (Environment::BOARD_SIZE * Environment::BOARD_SIZE)
                         ..(batch_index + 1) * (Environment::BOARD_SIZE * Environment::BOARD_SIZE)];
-                    let v = v[batch_index];
-                    let reward = request.terminal_reward.unwrap_or_else(|| v);
+                    let value = value[batch_index];
+                    let reward = request.terminal_reward.unwrap_or(value);
 
                     // Update the pre-expanded child node.
-                    node.state.policy.write().copy_from_slice(p);
+                    node.state.policy.write().copy_from_slice(policy);
 
                     // Update children's prior probability.
                     // This is required because every node after expanded are holding dummy prior probabilities.
                     for child in node.children.read().iter() {
                         let child = &*child;
                         let action = child.action.unwrap();
-                        let p = p[action];
-                        child.p.store(p, Ordering::Relaxed);
+                        let prob = policy[action];
+                        child.p.store(prob, Ordering::Relaxed);
                     }
 
                     // Perform backup from the expanded child node.

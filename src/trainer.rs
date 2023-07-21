@@ -2,22 +2,19 @@ use crate::{
     plot::Plotter,
     utils::{flip_horizontal, flip_vertical, rotate_180, rotate_270, rotate_90},
 };
-use alpha_zero::{AgentModel, BoardState, ParallelMCTSExecutor};
-use atomic_float::AtomicF32;
-use environment::{Environment, GameStatus, Stone};
-use mcts::{State, MCTS};
-use parking_lot::RwLock;
-use rand::{
-    distributions::WeightedIndex, prelude::Distribution, seq::IteratorRandom, thread_rng, Rng,
+use alpha_zero::{
+    encode_nn_input, encode_nn_targets, ActionSamplingMode, Agent, AgentModel, EnvTurnMode,
+    ParallelMCTSExecutor,
 };
+use environment::{Environment, GameStatus, Stone};
+use rand::{seq::IteratorRandom, thread_rng, Rng};
 use std::{
     collections::VecDeque,
     fs::{create_dir_all, remove_dir_all, remove_file},
     io::Write,
     path::Path,
-    sync::atomic::Ordering,
 };
-use tensorflow::{Scope, Session, SessionOptions, SessionRunArgs, Status, Tensor};
+use tensorflow::{Scope, Session, SessionOptions, SessionRunArgs, Status};
 
 pub struct Transition {
     pub env: Environment,
@@ -27,7 +24,7 @@ pub struct Transition {
 
 pub struct Trainer {
     pub session: Session,
-    pub agent: AgentModel,
+    pub agent_model: AgentModel,
     pub plotter: Plotter,
     pub replay_memory: VecDeque<Transition>,
 }
@@ -67,7 +64,7 @@ impl Trainer {
 
         let this = Self {
             session,
-            agent,
+            agent_model: agent,
             plotter,
             replay_memory: VecDeque::with_capacity(Self::REPLAY_MEMORY_SIZE),
         };
@@ -88,135 +85,48 @@ impl Trainer {
             println!("[iter={}] Entering self-play phase.", iteration + 1);
 
             let mut finished_episode_count = 0usize;
-            let mut env_list = vec![Environment::new(); Self::EPISODE_COUNT];
-            let mut mcts_list = Vec::with_capacity(Self::EPISODE_COUNT);
-            let mut turn_count_list = vec![0; Self::EPISODE_COUNT];
+            let mut agents = Vec::with_capacity(Self::EPISODE_COUNT);
+            let mut turn_counts = vec![0; Self::EPISODE_COUNT];
             let mut transition_list = Vec::with_capacity(Self::EPISODE_COUNT);
 
-            for env in &env_list {
-                mcts_list.push(MCTS::<BoardState>::new(BoardState {
-                    env: env.clone(),
-                    status: GameStatus::InProgress,
-                    policy: RwLock::new({
-                        let mut input_tensor = Tensor::new(&[
-                            1,
-                            Environment::BOARD_SIZE as u64,
-                            Environment::BOARD_SIZE as u64,
-                            2,
-                        ]);
-
-                        env.encode_board(env.turn, &mut input_tensor[..]);
-
-                        // Prepare the evaluation run arguments.
-                        let mut eval_run_args = SessionRunArgs::new();
-                        eval_run_args.add_feed(&self.agent.op_input, 0, &input_tensor);
-                        eval_run_args.add_target(&self.agent.op_p_output);
-                        eval_run_args.add_target(&self.agent.op_v_output);
-
-                        let p_fetch_token = eval_run_args.request_fetch(&self.agent.op_p_output, 0);
-
-                        // Evaluate the network.
-                        self.session.run(&mut eval_run_args)?;
-
-                        let p = eval_run_args.fetch::<f32>(p_fetch_token)?;
-                        let mut policy = [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
-
-                        policy[..].copy_from_slice(&p[..]);
-
-                        policy
-                    }),
-                    z: AtomicF32::new(0f32),
-                }));
+            for _ in 0..Self::EPISODE_COUNT {
+                agents.push(Agent::new(&self.agent_model, &self.session)?);
                 transition_list.push(Vec::with_capacity(64));
             }
 
-            while !env_list.is_empty() {
+            while !agents.is_empty() {
                 parallel_mcts_executor.execute(
                     Self::EVALUATE_COUNT,
                     Self::EVALUATE_BATCH_SIZE,
+                    &self.agent_model,
                     &self.session,
-                    &self.agent,
-                    &mcts_list,
+                    &agents,
                 )?;
 
                 let mut index = 0;
 
-                while index < env_list.len() {
-                    let env = &mut env_list[index];
-                    let mcts = &mut mcts_list[index];
-                    let turn_count = &mut turn_count_list[index];
+                while index < agents.len() {
+                    let agent = &mut agents[index];
+                    let turn_count = &mut turn_counts[index];
                     let transitions = &mut transition_list[index];
 
-                    // Get the policy from the root node. Policy is the visit count of the children.
-                    let mut policy = {
-                        let root = mcts.root();
-                        let children = root.children.read();
-                        let mut policy = [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
-
-                        for child in children.iter() {
-                            policy[child.action.unwrap()] = child.n.load(Ordering::Relaxed) as f32;
-                        }
-
-                        policy
-                    };
-
-                    // Normalize the policy if the policy is not all zero.
-                    // This is necessary because the policy is the visit count of the children.
-                    let sum = policy.iter().sum::<f32>();
-                    if f32::EPSILON <= sum {
-                        for action in 0..Environment::BOARD_SIZE * Environment::BOARD_SIZE {
-                            policy[action] /= sum;
-                        }
-                    }
-
-                    let action = if *turn_count < Self::TEMPERATURE_THRESHOLD {
-                        // Apply Boltzmann exploration.
-                        let inv_tau = Self::TEMPERATURE.recip();
-
-                        for index in 0..Environment::BOARD_SIZE * Environment::BOARD_SIZE {
-                            policy[index] = policy[index].powf(inv_tau);
-                        }
-
-                        // Re-normalize the policy if the policy is not all zero.
-                        let sum = policy.iter().sum::<f32>();
-                        if f32::EPSILON <= sum {
-                            for action in 0..Environment::BOARD_SIZE * Environment::BOARD_SIZE {
-                                policy[action] /= sum;
-                            }
-                        }
-
-                        // Sample an action from the policy.
-                        let dist = WeightedIndex::new(&policy).unwrap();
-                        dist.sample(&mut rng)
-                    } else {
-                        // Find best action.
-                        policy
-                            .iter()
-                            .enumerate()
-                            .max_by(|&(_, a), &(_, b)| f32::total_cmp(a, b))
-                            .unwrap()
-                            .0
-                    };
+                    let (action, policy) = agent
+                        .sample_action(if *turn_count < Self::TEMPERATURE_THRESHOLD {
+                            ActionSamplingMode::Boltzmann(Self::TEMPERATURE)
+                        } else {
+                            ActionSamplingMode::Best
+                        })
+                        .unwrap();
 
                     *turn_count += 1;
-
-                    let children_index = {
-                        let children = mcts.root().children.read();
-                        let (index, _) = children
-                            .iter()
-                            .enumerate()
-                            .find(|&(_, child)| child.action == Some(action))
-                            .unwrap();
-                        index
-                    };
 
                     // Clone the environment to store.
                     // This is required because we have to store the environment
                     // before the action is applied.
-                    let env_before_action = env.clone();
+                    let env_before_action = agent.env.clone();
 
                     // Play the action.
-                    let (z, is_terminal) = match env.place_stone(action).unwrap() {
+                    let (z, is_terminal) = match agent.play_action(action).unwrap() {
                         GameStatus::InProgress => (0f32, false),
                         GameStatus::Draw => (0f32, true),
                         GameStatus::BlackWin => (1f32, true),
@@ -232,9 +142,8 @@ impl Trainer {
                     if is_terminal {
                         finished_episode_count += 1;
 
-                        env_list.swap_remove(index);
-                        mcts_list.swap_remove(index);
-                        turn_count_list.swap_remove(index);
+                        agents.swap_remove(index);
+                        turn_counts.swap_remove(index);
 
                         print!(
                             "\r[iter={}] Self-playing... [episode={}/{}]",
@@ -246,9 +155,6 @@ impl Trainer {
 
                         continue;
                     }
-
-                    // Re-root the tree.
-                    mcts.transition(children_index);
 
                     index += 1;
                 }
@@ -377,75 +283,33 @@ impl Trainer {
             println!("[iter={}] Entering training phase.", iteration + 1);
 
             for _ in 0..Self::TRAINING_COUNT {
-                let transition = self
+                let transitions = self
                     .replay_memory
                     .iter()
                     .choose_multiple(&mut rng, Self::TRAINING_BATCH_SIZE);
 
-                debug_assert!(transition.len() == Self::TRAINING_BATCH_SIZE);
+                debug_assert!(!transitions.is_empty());
 
-                let mut tensor_input = Tensor::new(&[
-                    Self::TRAINING_BATCH_SIZE as u64,
-                    Environment::BOARD_SIZE as u64,
-                    Environment::BOARD_SIZE as u64,
-                    2,
-                ]);
-                let mut tensor_z_input = Tensor::new(&[Self::TRAINING_BATCH_SIZE as u64, 1]);
-                let mut tensor_pi_input = Tensor::new(&[
-                    Self::TRAINING_BATCH_SIZE as u64,
-                    Environment::BOARD_SIZE as u64,
-                    Environment::BOARD_SIZE as u64,
-                ]);
+                let input = encode_nn_input(
+                    transitions.len(),
+                    EnvTurnMode::Player,
+                    transitions.iter().map(|&transition| &transition.env),
+                );
+                let (policy_target, value_target) = encode_nn_targets(
+                    transitions.len(),
+                    transitions.iter().map(|&transition| &transition.policy),
+                    transitions.iter().map(|&transition| transition.z),
+                );
 
-                for batch_index in 0..Self::TRAINING_BATCH_SIZE {
-                    let transition = transition[batch_index];
+                let (policy_loss, value_loss, loss) =
+                    self.agent_model
+                        .train(&self.session, input, policy_target, value_target)?;
 
-                    transition.env.encode_board(
-                        transition.env.turn,
-                        &mut tensor_input[batch_index
-                            * Environment::BOARD_SIZE
-                            * Environment::BOARD_SIZE
-                            * 2
-                            ..(batch_index + 1)
-                                * Environment::BOARD_SIZE
-                                * Environment::BOARD_SIZE
-                                * 2],
-                    );
-                    tensor_z_input[batch_index] = transition.z;
-                    tensor_pi_input[batch_index * Environment::BOARD_SIZE * Environment::BOARD_SIZE
-                        ..(batch_index + 1) * Environment::BOARD_SIZE * Environment::BOARD_SIZE]
-                        .copy_from_slice(&transition.policy[..]);
-                }
+                recent_losses.push_back((value_loss, policy_loss, loss));
 
-                let mut train_run_args = SessionRunArgs::new();
-                train_run_args.add_feed(&self.agent.op_input, 0, &tensor_input);
-                train_run_args.add_feed(&self.agent.op_z_input, 0, &tensor_z_input);
-                train_run_args.add_feed(&self.agent.op_pi_input, 0, &tensor_pi_input);
-                train_run_args.add_target(&self.agent.op_minimize);
-                self.session.run(&mut train_run_args)?;
-
-                let mut loss_run_args = SessionRunArgs::new();
-                loss_run_args.add_feed(&self.agent.op_input, 0, &tensor_input);
-                loss_run_args.add_feed(&self.agent.op_z_input, 0, &tensor_z_input);
-                loss_run_args.add_feed(&self.agent.op_pi_input, 0, &tensor_pi_input);
-                loss_run_args.add_target(&self.agent.op_v_loss);
-                loss_run_args.add_target(&self.agent.op_p_loss);
-                loss_run_args.add_target(&self.agent.op_loss);
-
-                let v_loss_fetch_token = loss_run_args.request_fetch(&self.agent.op_v_loss, 0);
-                let p_loss_fetch_token = loss_run_args.request_fetch(&self.agent.op_p_loss, 0);
-                let loss_fetch_token = loss_run_args.request_fetch(&self.agent.op_loss, 0);
-                self.session.run(&mut loss_run_args)?;
-
-                let v_loss = loss_run_args.fetch::<f32>(v_loss_fetch_token)?;
-                let p_loss = loss_run_args.fetch::<f32>(p_loss_fetch_token)?;
-                let loss = loss_run_args.fetch::<f32>(loss_fetch_token)?;
-
-                if recent_losses.len() == 100 {
+                while 100 < recent_losses.len() {
                     recent_losses.pop_front();
                 }
-
-                recent_losses.push_back((v_loss[0], p_loss[0], loss[0]));
             }
 
             let (v_loss, p_loss, loss) = (
@@ -501,102 +365,27 @@ impl Trainer {
         let mut black_win = 0u32;
         let mut white_win = 0u32;
         let mut draw = 0u32;
-        let mut env_list = vec![Environment::new(); episode_count];
-        let mut mcts_list = Vec::with_capacity(episode_count);
+        let mut agents = Vec::with_capacity(episode_count);
 
-        for env in &env_list {
-            mcts_list.push(MCTS::<BoardState>::new(BoardState {
-            env: env.clone(),
-            status: GameStatus::InProgress,
-            policy: RwLock::new({
-                let mut input_tensor = Tensor::new(&[
-                    1,
-                    Environment::BOARD_SIZE as u64,
-                    Environment::BOARD_SIZE as u64,
-                    2,
-                ]);
-
-                env.encode_board(env.turn, &mut input_tensor[..]);
-
-                // Prepare the evaluation run arguments.
-                let mut eval_run_args = SessionRunArgs::new();
-                eval_run_args.add_feed(&self.agent.op_input, 0, &input_tensor);
-                eval_run_args.add_target(&self.agent.op_p_output);
-                eval_run_args.add_target(&self.agent.op_v_output);
-
-                let p_fetch_token = eval_run_args.request_fetch(&self.agent.op_p_output, 0);
-
-                // Evaluate the network.
-                self.session.run(&mut eval_run_args)?;
-
-                let p = eval_run_args.fetch::<f32>(p_fetch_token)?;
-                let mut policy = [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
-
-                policy[..].copy_from_slice(&p[..]);
-
-                policy
-            }),
-            z: AtomicF32::new(0f32),
-        }));
+        for _ in 0..episode_count {
+            agents.push(Agent::new(&self.agent_model, &self.session)?);
         }
 
-        while !env_list.is_empty() {
+        while !agents.is_empty() {
             parallel_mcts_executor.execute(
                 Self::TEST_EVALUATE_COUNT,
                 Self::EVALUATE_BATCH_SIZE,
+                &self.agent_model,
                 &self.session,
-                &self.agent,
-                &mcts_list,
+                &agents,
             )?;
 
             let mut index = 0;
 
-            while index < env_list.len() {
-                let env = &mut env_list[index];
-                let mcts = &mut mcts_list[index];
-
-            let (children_index, best_action) = {
-                    let children = mcts.root().children.read();
-                let (index, node) = children
-                    .iter()
-                    .enumerate()
-                    .max_by(|&(_, a), &(_, b)| {
-                        a.n.load(Ordering::Relaxed)
-                            .cmp(&b.n.load(Ordering::Relaxed))
-                    })
-                    .unwrap();
-                (index, node.action.unwrap())
-            };
-
-                let is_terminal = match env.place_stone(best_action).unwrap() {
-                    GameStatus::InProgress => false,
-                GameStatus::Draw => {
-                        draw += 1;
-                        true
-                }
-                GameStatus::BlackWin => {
-                        black_win += 1;
-                        true
-                }
-                GameStatus::WhiteWin => {
-                        white_win += 1;
-                        true
-                    }
-                };
-
-                if is_terminal {
-                    env_list.swap_remove(index);
-                    mcts_list.swap_remove(index);
-                        continue;
-                    }
-
-                mcts.transition(children_index);
-
-            let legal_moves = (0..Environment::BOARD_SIZE * Environment::BOARD_SIZE)
-                .filter(|&action| env.board[action] == Stone::Empty)
-                .collect::<Vec<_>>();
-            let random_move = legal_moves[rng.gen_range(0..legal_moves.len())];
-                let is_terminal = match env.place_stone(random_move).unwrap() {
+            while index < agents.len() {
+                let agent = &mut agents[index];
+                let (best_action, _) = agent.sample_action(ActionSamplingMode::Best).unwrap();
+                let is_terminal = match agent.play_action(best_action).unwrap() {
                     GameStatus::InProgress => false,
                     GameStatus::Draw => {
                         draw += 1;
@@ -613,86 +402,37 @@ impl Trainer {
                 };
 
                 if is_terminal {
-                    env_list.swap_remove(index);
-                    mcts_list.swap_remove(index);
+                    agents.swap_remove(index);
                     continue;
                 }
 
-            let has_random_move_children = {
-                    let children = mcts.root().children.read();
-                children.iter().any(|node| node.action == Some(random_move))
-            };
-            if !has_random_move_children {
-                // Encode the board state.
-                let mut board_tensor = Tensor::new(&[
-                    1,
-                    Environment::BOARD_SIZE as u64,
-                    Environment::BOARD_SIZE as u64,
-                    2,
-                ]);
-                    env.encode_board(env.turn.opponent(), &mut board_tensor[..]);
+                let legal_moves = (0..Environment::BOARD_SIZE * Environment::BOARD_SIZE)
+                    .filter(|&action| agent.env.board[action] == Stone::Empty)
+                    .collect::<Vec<_>>();
+                let random_action = legal_moves[rng.gen_range(0..legal_moves.len())];
 
-                // Evaluate the NN with the child state to get the policy and value.
-                let mut eval_run_args = SessionRunArgs::new();
-                eval_run_args.add_feed(&self.agent.op_input, 0, &board_tensor);
-                eval_run_args.add_target(&self.agent.op_p_output);
-                eval_run_args.add_target(&self.agent.op_v_output);
+                agent.ensure_action_exists(random_action, &self.agent_model, &self.session)?;
 
-                let p_fetch_token = eval_run_args.request_fetch(&self.agent.op_p_output, 0);
-                let v_fetch_token = eval_run_args.request_fetch(&self.agent.op_v_output, 0);
-
-                self.session.run(&mut eval_run_args)?;
-
-                let p = eval_run_args.fetch::<f32>(p_fetch_token)?;
-                let v = eval_run_args.fetch::<f32>(v_fetch_token)?;
-
-                let mut pi = [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
-                pi.copy_from_slice(&p[..]);
-
-                // Filter out illegal actions.
-                pi[random_move] = 0.0;
-                for action in 0..Environment::BOARD_SIZE * Environment::BOARD_SIZE {
-                        if !mcts.root().state.is_available_action(action) {
-                        pi[action] = 0.0;
+                let is_terminal = match agent.play_action(random_action).unwrap() {
+                    GameStatus::InProgress => false,
+                    GameStatus::Draw => {
+                        draw += 1;
+                        true
                     }
-                }
-
-                // Re-normalize the policy if the policy is not all zero.
-                let sum = pi.iter().sum::<f32>();
-                if f32::EPSILON <= sum {
-                    for action in 0..Environment::BOARD_SIZE * Environment::BOARD_SIZE {
-                        pi[action] /= sum;
+                    GameStatus::BlackWin => {
+                        black_win += 1;
+                        true
                     }
-                }
-
-                // Make the child node.
-                    match mcts.expand(
-                        mcts.root(),
-                    random_move,
-                    BoardState {
-                        env: env.clone(),
-                            status: GameStatus::InProgress,
-                        policy: RwLock::new(pi),
-                        z: AtomicF32::new(v[0]),
-                    },
-                ) {
-                    Some(child) => {
-                        // Perform backup from the leaf node.
-                        child.propagate(v[0]);
+                    GameStatus::WhiteWin => {
+                        white_win += 1;
+                        true
                     }
-                    None => {}
+                };
+
+                if is_terminal {
+                    agents.swap_remove(index);
+                    continue;
                 }
-            }
-
-            let children_index = {
-                    let children = mcts.root().children.read();
-                children
-                    .iter()
-                    .position(|node| node.action == Some(random_move))
-                    .unwrap()
-            };
-
-                mcts.transition(children_index);
 
                 index += 1;
             }
@@ -718,7 +458,10 @@ impl Trainer {
             }
         }
 
-        self.agent.io.save(&self.session, &path_model).unwrap();
+        self.agent_model
+            .io
+            .save(&self.session, &path_model)
+            .unwrap();
     }
 
     pub fn load(&self, name: impl AsRef<Path>) {
@@ -728,6 +471,6 @@ impl Trainer {
             return;
         }
 
-        self.agent.io.load(&self.session, &path).unwrap();
+        self.agent_model.io.load(&self.session, &path).unwrap();
     }
 }
