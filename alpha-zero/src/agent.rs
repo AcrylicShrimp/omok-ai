@@ -147,6 +147,10 @@ impl Agent {
         agent_model: &AgentModel,
         session: &Session,
     ) -> Result<(), Status> {
+        if Environment::BOARD_SIZE * Environment::BOARD_SIZE <= action {
+            return Ok(());
+        }
+
         let mut env = self.env.clone();
         env.place_stone(action);
 
