@@ -118,9 +118,12 @@ impl ParallelMCTSExecutor {
                             }
 
                             let sum = policy.iter().sum::<f32>();
+
                             if f32::EPSILON <= sum {
+                                let sum_inv = sum.recip();
+
                                 for policy in policy.iter_mut() {
-                                    *policy /= sum;
+                                    *policy *= sum_inv;
                                 }
                             }
 
