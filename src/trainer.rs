@@ -84,6 +84,9 @@ impl Trainer {
             println!("========================================");
             println!("[iter={}] Entering self-play phase.", iteration + 1);
 
+            // Empty the replay memory.
+            self.replay_memory.clear();
+
             let mut finished_episode_count = 0usize;
             let mut agents = Vec::with_capacity(Self::EPISODE_COUNT);
             let mut turn_counts = vec![0; Self::EPISODE_COUNT];
