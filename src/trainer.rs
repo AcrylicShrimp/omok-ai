@@ -32,17 +32,17 @@ pub struct Trainer {
 impl Trainer {
     pub const MODEL_NAME: &'static str = "alpha-zero";
 
-    pub const REPLAY_MEMORY_SIZE: usize = 600_000;
-    pub const EPISODE_COUNT: usize = 50;
+    pub const REPLAY_MEMORY_SIZE: usize = 250_000;
+    pub const EPISODE_COUNT: usize = 500;
     pub const EVALUATE_COUNT: usize = 600;
-    pub const EVALUATE_BATCH_SIZE: usize = 16;
-    pub const TRAINING_COUNT: usize = 600;
-    pub const TRAINING_BATCH_SIZE: usize = 128;
+    pub const EVALUATE_BATCH_SIZE: usize = 8;
+    pub const TRAINING_COUNT: usize = 1000;
+    pub const TRAINING_BATCH_SIZE: usize = 256;
 
-    pub const TEST_EVALUATE_COUNT: usize = 800;
+    pub const TEST_EVALUATE_COUNT: usize = 600;
 
-    pub const TEMPERATURE: f32 = 1.0;
-    pub const TEMPERATURE_THRESHOLD: usize = 30;
+    pub const TEMPERATURE: f32 = 2.0;
+    pub const TEMPERATURE_THRESHOLD: usize = 100;
 
     pub fn new() -> Result<Self, Status> {
         let mut scope = Scope::new_root_scope();
