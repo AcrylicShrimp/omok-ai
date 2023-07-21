@@ -110,6 +110,12 @@ impl Agent {
                     let temperature_inv = temperature.recip();
 
                     for action in 0..Environment::BOARD_SIZE * Environment::BOARD_SIZE {
+                        let prob = policy[action];
+
+                        if prob < f32::EPSILON {
+                            continue;
+                        }
+
                         let heated = (policy[action] * temperature_inv).exp();
                         sum += heated;
                         heated_policy[action] = heated;
