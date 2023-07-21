@@ -166,21 +166,41 @@ impl ParallelMCTSExecutor {
 
                 let input = encode_nn_input(
                     requests.len(),
-                    EnvTurnMode::Opponent,
+                    EnvTurnMode::Player,
                     requests.iter().map(|request| &request.node.state.env),
                 );
                 let (policy, value) = agent_model.evaluate_pv(session, input)?;
 
                 for (batch_index, request) in requests.iter().enumerate() {
                     let node = &*request.node;
-                    let policy = &policy[batch_index
+                    let raw_policy = &policy[batch_index
                         * (Environment::BOARD_SIZE * Environment::BOARD_SIZE)
                         ..(batch_index + 1) * (Environment::BOARD_SIZE * Environment::BOARD_SIZE)];
                     let value = value[batch_index];
                     let reward = request.terminal_reward.unwrap_or(value);
 
+                    // Filter out illegal actions and normalize the policy.
+                    let mut policy = [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
+                    policy.copy_from_slice(raw_policy);
+
+                    for action in 0..Environment::BOARD_SIZE * Environment::BOARD_SIZE {
+                        if !node.state.is_available_action(action) {
+                            policy[action] = 0f32;
+                        }
+                    }
+
+                    let sum = policy.iter().sum::<f32>();
+
+                    if f32::EPSILON <= sum {
+                        let sum_inv = sum.recip();
+
+                        for policy in policy.iter_mut() {
+                            *policy *= sum_inv;
+                        }
+                    }
+
                     // Update the pre-expanded child node.
-                    node.state.policy.write().copy_from_slice(policy);
+                    *node.state.policy.write() = policy;
 
                     // Update children's prior probability.
                     // This is required because every node after expanded are holding dummy prior probabilities.
