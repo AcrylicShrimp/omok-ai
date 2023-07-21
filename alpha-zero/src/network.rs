@@ -33,9 +33,7 @@ impl Network {
     pub const V_FLATTEN_SIZE: i64 =
         Environment::BOARD_SIZE as i64 * Environment::BOARD_SIZE as i64 * Self::V_CONV_CHANNELS;
 
-    pub const V_FC0_SIZE: i64 = 128;
-    pub const V_FC1_SIZE: i64 = 128;
-    pub const V_FC2_SIZE: i64 = 1;
+    pub const V_FC0_SIZE: i64 = 1;
 
     pub const P_CONV_FILTER_SIZE: i64 = 1;
     pub const P_CONV_CHANNELS: i64 = 32;
@@ -44,8 +42,7 @@ impl Network {
     pub const P_FLATTEN_SIZE: i64 =
         Environment::BOARD_SIZE as i64 * Environment::BOARD_SIZE as i64 * Self::P_CONV_CHANNELS;
 
-    pub const P_FC0_SIZE: i64 = 128;
-    pub const P_FC1_SIZE: i64 = Environment::BOARD_SIZE as i64 * Environment::BOARD_SIZE as i64;
+    pub const P_FC0_SIZE: i64 = Environment::BOARD_SIZE as i64 * Environment::BOARD_SIZE as i64;
     pub const P_OUTPUT_SIZE: i64 = Environment::BOARD_SIZE as i64;
 
     pub fn new(
@@ -143,40 +140,12 @@ impl Network {
             WeightInitializer::He,
             scope,
         )?;
-        let v_fc0_activation =
-            leaky_relu(v_fc0.output, &mut scope.with_op_name("v_fc0_activation"))?;
-        variables.push(v_fc0.w);
-        variables.push(v_fc0.b);
-
-        let v_fc1 = network_utils::fc(
-            "v_fc1",
-            DataType::Float,
-            v_fc0_activation,
-            Self::V_FC0_SIZE,
-            Self::V_FC1_SIZE,
-            WeightInitializer::He,
-            scope,
-        )?;
-        let v_fc1_activation =
-            leaky_relu(v_fc1.output, &mut scope.with_op_name("v_fc1_activation"))?;
-        variables.push(v_fc1.w);
-        variables.push(v_fc1.b);
-
-        let v_fc2 = network_utils::fc(
-            "v_fc2",
-            DataType::Float,
-            v_fc1_activation,
-            Self::V_FC1_SIZE,
-            Self::V_FC2_SIZE,
-            WeightInitializer::Xavier,
-            scope,
-        )?;
-        let v_fc2_activation = tanh(
-            v_fc2.output,
+        let v_fc0_activation = tanh(
+            v_fc0.output,
             &mut scope.with_op_name(v_output_name.as_ref()),
         )?;
-        variables.push(v_fc2.w);
-        variables.push(v_fc2.b);
+        variables.push(v_fc0.w);
+        variables.push(v_fc0.b);
 
         let p_conv = network_utils::conv2d(
             "p_conv",
@@ -210,42 +179,28 @@ impl Network {
             WeightInitializer::He,
             scope,
         )?;
-        let p_fc0_activation =
-            leaky_relu(p_fc0.output, &mut scope.with_op_name("p_fc0_activation"))?;
+        let p_fc0_activation = softmax(
+            p_fc0.output.clone(),
+            &mut scope.with_op_name("p_fc0_activation"),
+        )?;
         variables.push(p_fc0.w);
         variables.push(p_fc0.b);
 
-        let p_fc1 = network_utils::fc(
-            "p_fc1",
-            DataType::Float,
-            p_fc0_activation,
-            Self::P_FC0_SIZE,
-            Self::P_FC1_SIZE,
-            WeightInitializer::He,
-            scope,
-        )?;
-        let p_fc1_activation = softmax(
-            p_fc1.output.clone(),
-            &mut scope.with_op_name("p_fc1_activation"),
-        )?;
-        variables.push(p_fc1.w);
-        variables.push(p_fc1.b);
-
         let p_output = reshape(
-            p_fc1_activation.clone(),
+            p_fc0_activation.clone(),
             constant(&[-1, Self::P_OUTPUT_SIZE, Self::P_OUTPUT_SIZE], scope)?,
             &mut scope.with_op_name(p_output_name.as_ref()),
         )?;
 
         let p_loss = mean(
-            softmax_cross_entropy_with_logits(p_fc1.output, op_p_label, scope)?,
+            softmax_cross_entropy_with_logits(p_fc0.output, op_p_label, scope)?,
             constant(&[0], scope)?,
             &mut scope.with_op_name(p_loss_name.as_ref()),
         )?;
 
         Ok(Self {
             op_input,
-            op_v_output: v_fc2_activation,
+            op_v_output: v_fc0_activation,
             op_p_output: p_output,
             op_p_loss: p_loss,
             variables,
