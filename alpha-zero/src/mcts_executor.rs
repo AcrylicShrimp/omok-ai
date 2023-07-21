@@ -44,6 +44,7 @@ impl MCTSExecutor {
             (0..exec_count)
                 .into_par_iter()
                 .try_for_each(|_| -> Result<(), Status> {
+                    let mut rng = thread_rng();
                     let mut requests = Vec::with_capacity(batch_size);
 
                     for _ in 0..batch_size {
@@ -68,7 +69,6 @@ impl MCTSExecutor {
 
                         // Select any possible action.
                         // Since the leaf node doesn't have terminal state, we need to expand it.
-                        let mut rng = thread_rng();
                         let action = {
                             let mut bits = BitVec::<usize>::repeat(
                                 false,
