@@ -9,7 +9,7 @@ interface ClickResponse {
   game_status: number;
 }
 
-const BOARD_SIZE = 15;
+const BOARD_SIZE = 3;
 
 window.onload = () => {
   const root = document.getElementById("root")!;
@@ -26,11 +26,8 @@ window.onload = () => {
   const calculateGridCell = getCalculateGridCell(width, height);
   const makeStoneElement = getMakeStoneElement(width, height);
 
-  root.onclick = (ev) => {
-    invoke<ClickResponse>(
-      "on_click",
-      calculateGridCell(ev.clientX, ev.clientY)
-    ).then((res) => {
+  function sendOnClick(x: number, y: number): void {
+    invoke<ClickResponse>("on_click", calculateGridCell(x, y)).then((res) => {
       const { board, game_status } = res;
       root.innerHTML = "";
       root.appendChild(background);
@@ -44,6 +41,12 @@ window.onload = () => {
         }
       }
     });
+  }
+
+  sendOnClick(width + 1, height + 1);
+
+  root.onclick = (ev) => {
+    sendOnClick(ev.clientX, ev.clientY);
   };
 };
 

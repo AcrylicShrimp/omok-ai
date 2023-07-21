@@ -10,31 +10,27 @@ use environment::{Environment, GameStatus, Stone, Turn};
 use std::sync::Mutex;
 
 struct Application {
-    env: Environment,
-    env_status: GameStatus,
     agent: Agent,
+    env_status: GameStatus,
 }
 
 impl Application {
+    pub const MCTS_COUNT: usize = 600;
+    pub const MCTS_BATCH_SIZE: usize = 16;
+
     pub fn new() -> Self {
-        let mut env = Environment::new();
-        let mut agent = Agent::new(env.clone());
+        let mut agent = Agent::new();
 
-        let action = agent.make_move();
-        env.place_stone(action);
-        agent.sync_move(&env, action);
+        let action = agent.make_move(Self::MCTS_COUNT, Self::MCTS_BATCH_SIZE);
+        let env_status = agent.agent.play_action(action).unwrap();
 
-        Self {
-            env,
-            env_status: GameStatus::InProgress,
-            agent,
-        }
+        Self { agent, env_status }
     }
 
     fn on_click_button(&mut self, x: usize, y: usize) -> &mut Self {
         match self.env_status {
             GameStatus::InProgress => {
-                if self.env.turn != Turn::White {
+                if self.agent.agent.env.turn != Turn::White {
                     return self;
                 }
 
@@ -43,14 +39,12 @@ impl Application {
             }
             _ => {
                 // Reset game
-                self.env = Environment::new();
-                self.agent = Agent::new(self.env.clone());
+                self.agent = Agent::new();
 
-                let action = self.agent.make_move();
-
-                self.env.place_stone(action);
-                self.agent.sync_move(&self.env, action);
-                self.env_status = GameStatus::InProgress;
+                let action = self
+                    .agent
+                    .make_move(Self::MCTS_COUNT, Self::MCTS_BATCH_SIZE);
+                self.env_status = self.agent.agent.play_action(action).unwrap();
             }
         }
 
@@ -58,18 +52,23 @@ impl Application {
     }
 
     fn place_stone(&mut self, index: usize) {
-        self.env_status = match self.env.place_stone(index) {
+        self.agent
+            .agent
+            .ensure_action_exists(index, &self.agent.agent_model, &self.agent.session)
+            .unwrap();
+        self.env_status = match self.agent.agent.play_action(index) {
             Some(status) => status,
             None => return,
         };
 
-        if self.env_status != GameStatus::InProgress {
+        if self.env_status.is_terminal() {
             return;
         }
 
-        let action = self.agent.make_move();
-        self.env_status = self.env.place_stone(action).unwrap();
-        self.agent.sync_move(&self.env, action);
+        let action = self
+            .agent
+            .make_move(Self::MCTS_COUNT, Self::MCTS_BATCH_SIZE);
+        self.env_status = self.agent.agent.play_action(action).unwrap();
     }
 }
 
@@ -96,6 +95,8 @@ fn on_click(state: tauri::State<Mutex<Application>>, x: usize, y: usize) -> Clic
 
     ClickResponse {
         board: state
+            .agent
+            .agent
             .env
             .board
             .iter()

@@ -1,46 +1,53 @@
-use super::{mcts_node::BoardState, AgentModel};
+use crate::{encode_nn_input, mcts_node::BoardState, Agent, AgentModel, EnvTurnMode};
 use atomic_float::AtomicF32;
 use bitvec::vec::BitVec;
 use environment::{Environment, GameStatus, Stone};
-use mcts::{Node, NodePtr, State, MCTS};
+use mcts::{Node, NodePtr, State};
 use parking_lot::RwLock;
 use rand::{seq::SliceRandom, thread_rng};
 use rayon::{
     prelude::{IntoParallelIterator, ParallelIterator},
-    ThreadPool,
+    ThreadPool, ThreadPoolBuilder,
 };
 use std::sync::atomic::Ordering;
-use tensorflow::{Session, SessionRunArgs, Status, Tensor};
+use tensorflow::{Session, Status};
 
 pub struct MCTSExecutor {
-    pub mcts: MCTS<BoardState>,
+    thread_pool: ThreadPool,
 }
 
 impl MCTSExecutor {
-    pub const NN_EVALUATION_BATCH_SIZE: usize = 16;
-
     pub const C_PUCT: f32 = 1.0;
     pub const V_LOSS: f32 = 0.1;
 
-    pub fn new(mcts: MCTS<BoardState>) -> Self {
-        Self { mcts }
+    pub fn new() -> Self {
+        Self {
+            thread_pool: ThreadPoolBuilder::new().build().unwrap(),
+        }
     }
 
     pub fn run(
         &self,
-        thread_pool: &ThreadPool,
-        agent: &AgentModel,
-        session: &Session,
         count: usize,
+        batch_size: usize,
+        agent_model: &AgentModel,
+        session: &Session,
+        agent: &Agent,
     ) -> Result<(), Status> {
-        thread_pool.install(|| {
-            (0..count)
+        let mut exec_count = count / batch_size;
+
+        if exec_count * batch_size != count {
+            exec_count += 1;
+        }
+
+        self.thread_pool.install(|| {
+            (0..exec_count)
                 .into_par_iter()
                 .try_for_each(|_| -> Result<(), Status> {
-                    let mut requests = Vec::with_capacity(Self::NN_EVALUATION_BATCH_SIZE);
+                    let mut requests = Vec::with_capacity(batch_size);
 
-                    for _ in 0..Self::NN_EVALUATION_BATCH_SIZE {
-                        let node = self.mcts.select_leaf(|parent, children| {
+                    for _ in 0..batch_size {
+                        let node = agent.mcts.select_leaf(|parent, children| {
                             let parent_n = parent.n.load(Ordering::Relaxed);
                             children
                                 .iter()
@@ -118,7 +125,7 @@ impl MCTSExecutor {
                         }
 
                         // Pre-expand the node.
-                        let expanded_child = match self.mcts.expand(
+                        let expanded_child = match agent.mcts.expand(
                             node,
                             action,
                             BoardState {
@@ -152,63 +159,32 @@ impl MCTSExecutor {
                         return Ok(());
                     }
 
-                    // Prepare the input tensor.
-                    let mut input_tensor = Tensor::new(&[
-                        requests.len() as u64,
-                        Environment::BOARD_SIZE as u64,
-                        Environment::BOARD_SIZE as u64,
-                        2,
-                    ]);
-
-                    // Encode the board state.
-                    for (batch_index, request) in requests.iter().enumerate() {
-                        let env = &request.node.state.env;
-                        env.encode_board(
-                            env.turn.opponent(),
-                            &mut input_tensor[batch_index
-                                * Environment::BOARD_SIZE
-                                * Environment::BOARD_SIZE
-                                * 2
-                                ..(batch_index + 1)
-                                    * Environment::BOARD_SIZE
-                                    * Environment::BOARD_SIZE
-                                    * 2],
-                        );
-                    }
-
-                    // Prepare the evaluation run arguments.
-                    let mut eval_run_args = SessionRunArgs::new();
-                    eval_run_args.add_feed(&agent.op_input, 0, &input_tensor);
-                    eval_run_args.add_target(&agent.op_p_output);
-                    eval_run_args.add_target(&agent.op_v_output);
-
-                    let p_fetch_token = eval_run_args.request_fetch(&agent.op_p_output, 0);
-                    let v_fetch_token = eval_run_args.request_fetch(&agent.op_v_output, 0);
-
-                    // Evaluate the network.
-                    session.run(&mut eval_run_args)?;
-
-                    let p = eval_run_args.fetch::<f32>(p_fetch_token)?;
-                    let v = eval_run_args.fetch::<f32>(v_fetch_token)?;
+                    let input = encode_nn_input(
+                        requests.len(),
+                        EnvTurnMode::Opponent,
+                        requests.iter().map(|request| &request.node.state.env),
+                    );
+                    let (policy, value) = agent_model.evaluate_pv(session, input)?;
 
                     for (batch_index, request) in requests.iter().enumerate() {
                         let node = &*request.node;
-                        let p = &p[batch_index * (Environment::BOARD_SIZE * Environment::BOARD_SIZE)
+                        let policy = &policy[batch_index
+                            * (Environment::BOARD_SIZE * Environment::BOARD_SIZE)
                             ..(batch_index + 1)
                                 * (Environment::BOARD_SIZE * Environment::BOARD_SIZE)];
-                        let v = v[batch_index];
-                        let reward = request.terminal_reward.unwrap_or_else(|| v);
+                        let value = value[batch_index];
+                        let reward = request.terminal_reward.unwrap_or(value);
 
                         // Update the pre-expanded child node.
-                        node.state.policy.write().copy_from_slice(p);
+                        node.state.policy.write().copy_from_slice(policy);
 
                         // Update children's prior probability.
                         // This is required because every node after expanded are holding dummy prior probabilities.
                         for child in node.children.read().iter() {
                             let child = &*child;
                             let action = child.action.unwrap();
-                            let p = p[action];
-                            child.p.store(p, Ordering::Relaxed);
+                            let prob = policy[action];
+                            child.p.store(prob, Ordering::Relaxed);
                         }
 
                         // Perform backup from the expanded child node.
