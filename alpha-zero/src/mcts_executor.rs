@@ -48,7 +48,7 @@ impl MCTSExecutor {
 
                     for _ in 0..batch_size {
                         let node = agent.mcts.select_leaf(|parent, children| {
-                            let parent_n = parent.n.load(Ordering::Relaxed);
+                            let parent_n = u64::max(1, parent.n.load(Ordering::Relaxed));
                             children
                                 .iter()
                                 .map(|child| compute_ucb_1(parent_n, child, Self::C_PUCT))
