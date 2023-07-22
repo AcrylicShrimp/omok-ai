@@ -10,6 +10,7 @@ alpha-zero = { path = "alpha-zero" }
 atomic_float = { version = "0.1" }
 bincode = { version = "1" }
 bitvec = { version = "1" }
+clap = "4.3.19"
 environment = { path = "environment" }
 mcts = { path = "mcts" }
 network-utils = { path = "network-utils" }
@@ -20,6 +21,7 @@ rayon = { version = "1.7" }
 serde = { version = "1", features = ["derive"] }
 tensorflow = { version = "0.20", features = ["tensorflow_gpu"] }
 thiserror = { version = "1" }
+toml = "0.7.6"
 
 [workspace]
 members = [
