@@ -21,19 +21,20 @@ pub enum PlotError {
 
 pub struct Plotter {
     losses: VecDeque<(f32, f32, f32)>,
+    max_losses: usize,
 }
 
 impl Plotter {
-    pub const MAX_LOSSES: usize = 1024 * 1024;
 
-    pub fn new() -> Self {
+    pub fn new(max_losses: usize) -> Self {
         Self {
             losses: VecDeque::new(),
+            max_losses,
         }
     }
 
     pub fn add_loss(&mut self, loss: (f32, f32, f32)) {
-        if self.losses.len() == Self::MAX_LOSSES {
+        if self.losses.len() == self.max_losses {
             self.losses.pop_front();
         }
 

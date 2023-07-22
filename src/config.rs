@@ -8,14 +8,14 @@ use std::{
 
 use toml;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
     pub parameters: Parameters,
     //pub enviroment: Enviroment,    // TODO: implement enviroment or make it separate from the
                                      //       config file
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Parameters {
     // Trainer Parameters
     pub model_name: String,

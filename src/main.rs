@@ -20,10 +20,10 @@ fn cli() -> Command {
 
 fn main() -> Result<(), Status> {
     let args = cli().get_matches();
-    let mut train = Trainer::new()?;
-
     let config_name = args.get_one::<String>("config").unwrap();
-    let config = config::Config::new(config_name);
+        
+    let mut train = Trainer::new(config_name)?;
+
     train.train(10_000)?;
     Ok(())
 }
