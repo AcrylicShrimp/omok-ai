@@ -175,7 +175,9 @@ impl MCTSExecutor {
                             * (Environment::BOARD_SIZE * Environment::BOARD_SIZE)
                             ..(batch_index + 1)
                                 * (Environment::BOARD_SIZE * Environment::BOARD_SIZE)];
-                        let value = value[batch_index];
+
+                        // The value should be negated because the value is from the perspective of the opponent.
+                        let value = -value[batch_index];
                         let reward = request.terminal_reward.unwrap_or(value);
 
                         // Filter out illegal actions and normalize the policy.
