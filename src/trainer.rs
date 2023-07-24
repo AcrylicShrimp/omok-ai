@@ -39,6 +39,7 @@ impl Trainer {
     pub const TRAINING_COUNT: usize = 600;
     pub const TRAINING_BATCH_SIZE: usize = 128;
 
+    pub const TEST_EVALUATE_COUNT: usize = 1000;
 
     pub const EPSILON: f32 = 0.25;
     pub const ALPHA: f32 = 0.03;
