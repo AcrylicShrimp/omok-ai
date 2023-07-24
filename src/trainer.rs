@@ -144,6 +144,15 @@ impl Trainer {
                     });
 
                     if is_terminal {
+                        // We have to put the last transition into the replay memory, in perspective of loser.
+                        transitions.push(Transition {
+                            env: agent.env.clone(),
+                            policy: [1f32
+                                / (Environment::BOARD_SIZE * Environment::BOARD_SIZE) as f32;
+                                Environment::BOARD_SIZE * Environment::BOARD_SIZE],
+                            z: -z,
+                        });
+
                         finished_episode_count += 1;
 
                         agents.swap_remove(index);
