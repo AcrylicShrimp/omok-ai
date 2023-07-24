@@ -24,6 +24,7 @@ thiserror = { version = "1" }
 [workspace]
 members = [
     "alpha-zero",
+    "benchmark",
     "environment",
     "gui",
     "mcts",

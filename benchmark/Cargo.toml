@@ -1,0 +1,12 @@
+[package]
+name = "benchmark"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+alpha-zero = { path = "../alpha-zero" }
+environment = { path = "../environment" }
+mcts = { path = "../mcts" }
+tensorflow = { version = "0.20" }

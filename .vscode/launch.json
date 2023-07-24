@@ -9,12 +9,7 @@
       "request": "launch",
       "name": "Debug unit tests in library 'environment'",
       "cargo": {
-        "args": [
-          "test",
-          "--no-run",
-          "--lib",
-          "--package=environment"
-        ],
+        "args": ["test", "--no-run", "--lib", "--package=environment"],
         "filter": {
           "name": "environment",
           "kind": "lib"
@@ -28,11 +23,7 @@
       "request": "launch",
       "name": "Debug executable 'gui'",
       "cargo": {
-        "args": [
-          "build",
-          "--bin=gui",
-          "--package=gui"
-        ],
+        "args": ["build", "--bin=gui", "--package=gui"],
         "filter": {
           "name": "gui",
           "kind": "bin"
@@ -46,12 +37,7 @@
       "request": "launch",
       "name": "Debug unit tests in executable 'gui'",
       "cargo": {
-        "args": [
-          "test",
-          "--no-run",
-          "--bin=gui",
-          "--package=gui"
-        ],
+        "args": ["test", "--no-run", "--bin=gui", "--package=gui"],
         "filter": {
           "name": "gui",
           "kind": "bin"
@@ -65,12 +51,7 @@
       "request": "launch",
       "name": "Debug unit tests in library 'mcts'",
       "cargo": {
-        "args": [
-          "test",
-          "--no-run",
-          "--lib",
-          "--package=mcts"
-        ],
+        "args": ["test", "--no-run", "--lib", "--package=mcts"],
         "filter": {
           "name": "mcts",
           "kind": "lib"
@@ -84,12 +65,7 @@
       "request": "launch",
       "name": "Debug unit tests in library 'network-utils'",
       "cargo": {
-        "args": [
-          "test",
-          "--no-run",
-          "--lib",
-          "--package=network-utils"
-        ],
+        "args": ["test", "--no-run", "--lib", "--package=network-utils"],
         "filter": {
           "name": "network-utils",
           "kind": "lib"
@@ -103,11 +79,7 @@
       "request": "launch",
       "name": "Debug executable 'omok-ai'",
       "cargo": {
-        "args": [
-          "build",
-          "--bin=omok-ai",
-          "--package=omok-ai"
-        ],
+        "args": ["build", "--bin=omok-ai", "--package=omok-ai"],
         "filter": {
           "name": "omok-ai",
           "kind": "bin"
@@ -121,14 +93,23 @@
       "request": "launch",
       "name": "Debug unit tests in executable 'omok-ai'",
       "cargo": {
-        "args": [
-          "test",
-          "--no-run",
-          "--bin=omok-ai",
-          "--package=omok-ai"
-        ],
+        "args": ["test", "--no-run", "--bin=omok-ai", "--package=omok-ai"],
         "filter": {
           "name": "omok-ai",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'benchmark'",
+      "cargo": {
+        "args": ["build", "--bin=benchmark", "--package=benchmark"],
+        "filter": {
+          "name": "benchmark",
           "kind": "bin"
         }
       },
