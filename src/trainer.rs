@@ -39,7 +39,9 @@ impl Trainer {
     pub const TRAINING_COUNT: usize = 600;
     pub const TRAINING_BATCH_SIZE: usize = 128;
 
-    pub const TEST_EVALUATE_COUNT: usize = 800;
+
+    pub const EPSILON: f32 = 0.25;
+    pub const ALPHA: f32 = 0.03;
 
     pub const TEMPERATURE: f32 = 1.0;
     pub const TEMPERATURE_THRESHOLD: usize = 30;
@@ -102,6 +104,8 @@ impl Trainer {
                 parallel_mcts_executor.execute(
                     Self::EVALUATE_COUNT,
                     Self::EVALUATE_BATCH_SIZE,
+                    Self::EPSILON,
+                    Self::ALPHA,
                     &self.agent_model,
                     &self.session,
                     &agents,
@@ -389,6 +393,8 @@ impl Trainer {
             parallel_mcts_executor.execute(
                 Self::TEST_EVALUATE_COUNT,
                 Self::EVALUATE_BATCH_SIZE,
+                Self::EPSILON,
+                Self::ALPHA,
                 &self.agent_model,
                 &self.session,
                 &agents,

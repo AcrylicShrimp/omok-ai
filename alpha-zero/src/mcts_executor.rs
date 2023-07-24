@@ -5,6 +5,7 @@ use environment::{Environment, GameStatus, Stone};
 use mcts::{Node, NodePtr, State};
 use parking_lot::RwLock;
 use rand::{seq::SliceRandom, thread_rng};
+use rand_distr::{Dirichlet, Distribution};
 use rayon::{
     prelude::{IntoParallelIterator, ParallelIterator},
     ThreadPool, ThreadPoolBuilder,
@@ -30,10 +31,43 @@ impl MCTSExecutor {
         &self,
         count: usize,
         batch_size: usize,
+        epsilon: f32,
+        alpha: f32,
         agent_model: &AgentModel,
         session: &Session,
         agent: &Agent,
     ) -> Result<(), Status> {
+        {
+            let mut rng = thread_rng();
+
+            // Apply Dirichlet noise to the root node.
+            let noise_dist =
+                Dirichlet::new(&[alpha; Environment::BOARD_SIZE * Environment::BOARD_SIZE])
+                    .unwrap();
+            let noise = noise_dist.sample(&mut rng);
+
+            let mut policy = agent.mcts.root().state.policy.write();
+
+            for (action, policy) in policy.iter_mut().enumerate() {
+                *policy = (1.0 - epsilon) * *policy + epsilon * noise[action];
+            }
+
+            // Re-normalize the policy.
+            let sum = policy.iter().sum::<f32>();
+            let sum_inv = sum.recip();
+
+            for policy in policy.iter_mut() {
+                *policy *= sum_inv;
+            }
+
+            // Update children's prior probability.
+            for child in agent.mcts.root().children.read().iter() {
+                let action = child.action.unwrap();
+                let prob = policy[action];
+                child.p.store(prob, Ordering::Relaxed);
+            }
+        }
+
         let mut exec_count = count / batch_size;
 
         if exec_count * batch_size != count {
@@ -156,11 +190,11 @@ impl MCTSExecutor {
                                 expanded_child.propagate(terminal_reward);
                             }
                             None => {
-                        // Collect the requests.
-                        requests.push(NNEvalRequest {
-                            node: expanded_child,
-                        });
-                    }
+                                // Collect the requests.
+                                requests.push(NNEvalRequest {
+                                    node: expanded_child,
+                                });
+                            }
                         }
                     }
 

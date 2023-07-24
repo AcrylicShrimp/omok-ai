@@ -5,6 +5,7 @@ use environment::{Environment, GameStatus, Stone};
 use mcts::{Node, NodePtr, State};
 use parking_lot::RwLock;
 use rand::prelude::*;
+use rand_distr::Dirichlet;
 use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use std::sync::atomic::Ordering;
 use tensorflow::{Session, Status};
@@ -26,6 +27,8 @@ impl ParallelMCTSExecutor {
         &self,
         count: usize,
         batch_size: usize,
+        epsilon: f32,
+        alpha: f32,
         agent_model: &AgentModel,
         session: &Session,
         agents: &[Agent],
@@ -38,12 +41,42 @@ impl ParallelMCTSExecutor {
                     break;
                 }
 
-                processed_count += batch_size;
-
                 let requests = agents
                     .par_iter()
                     .flat_map(|agent| {
                         let mut rng = thread_rng();
+
+                        // Apply Dirichlet noise to the root node.
+                        if processed_count == 0 {
+                            let noise_dist = Dirichlet::new(
+                                &[alpha; Environment::BOARD_SIZE * Environment::BOARD_SIZE],
+                            )
+                            .unwrap();
+                            let noise = noise_dist.sample(&mut rng);
+
+                            // Apply the noise to the root node.
+                            let mut policy = agent.mcts.root().state.policy.write();
+
+                            for (action, policy) in policy.iter_mut().enumerate() {
+                                *policy = (1.0 - epsilon) * *policy + epsilon * noise[action];
+                            }
+
+                            // Re-normalize the policy.
+                            let sum = policy.iter().sum::<f32>();
+                            let sum_inv = sum.recip();
+
+                            for policy in policy.iter_mut() {
+                                *policy *= sum_inv;
+                            }
+
+                            // Update children's prior probability.
+                            for child in agent.mcts.root().children.read().iter() {
+                                let action = child.action.unwrap();
+                                let prob = policy[action];
+                                child.p.store(prob, Ordering::Relaxed);
+                            }
+                        }
+
                         let mut requests = Vec::with_capacity(batch_size);
 
                         for _ in 0..batch_size {
@@ -156,17 +189,19 @@ impl ParallelMCTSExecutor {
                                     expanded_child.propagate(terminal_reward);
                                 }
                                 None => {
-                            // Collect the requests.
-                            requests.push(NNEvalRequest {
-                                node: expanded_child,
-                            });
-                        }
+                                    // Collect the requests.
+                                    requests.push(NNEvalRequest {
+                                        node: expanded_child,
+                                    });
+                                }
                             }
                         }
 
                         requests
                     })
                     .collect::<Vec<_>>();
+
+                processed_count += batch_size;
 
                 if requests.is_empty() {
                     // There's no request for now.

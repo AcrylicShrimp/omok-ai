@@ -9,6 +9,9 @@ pub struct Agent {
 }
 
 impl Agent {
+    pub const EPSILON: f32 = 0.0;
+    pub const ALPHA: f32 = 1.0;
+
     pub fn new() -> Self {
         let mut scope = Scope::new_root_scope();
         let agent_model = AgentModel::new(&mut scope).unwrap();
@@ -48,6 +51,8 @@ impl Agent {
             .run(
                 mcts_count,
                 mcts_batch_size,
+                Self::EPSILON,
+                Self::ALPHA,
                 &self.agent_model,
                 &self.session,
                 &self.agent,

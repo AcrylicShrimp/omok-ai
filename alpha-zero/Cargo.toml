@@ -14,6 +14,7 @@ mcts = { path = "../mcts" }
 network-utils = { path = "../network-utils" }
 parking_lot = { version = "0.12", features = ["hardware-lock-elision"] }
 rand = { version = "0.8" }
+rand_distr = { version = "0.4" }
 rayon = { version = "1.7" }
 serde = { version = "1", features = ["derive"] }
 tensorflow = { version = "0.20", features = [] }
