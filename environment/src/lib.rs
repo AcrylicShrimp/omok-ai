@@ -11,7 +11,7 @@ pub enum Stone {
 impl Display for Stone {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Empty => write!(f, " "),
+            Self::Empty => write!(f, "-"),
             Self::Black => write!(f, "X"),
             Self::White => write!(f, "O"),
         }
