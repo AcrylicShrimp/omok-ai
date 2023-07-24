@@ -5,5 +5,6 @@
     "./mcts/Cargo.toml",
     "./network-utils/Cargo.toml",
     "./Cargo.toml"
-  ]
+  ],
+  "rust-analyzer.showUnlinkedFileNotification": false
 }
