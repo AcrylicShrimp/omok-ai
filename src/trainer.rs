@@ -1,4 +1,5 @@
 use crate::{
+    config::Config,
     plot::Plotter,
     utils::{flip_horizontal, flip_vertical, rotate_180, rotate_270, rotate_90},
 };
@@ -27,27 +28,13 @@ pub struct Trainer {
     pub agent_model: AgentModel,
     pub plotter: Plotter,
     pub replay_memory: VecDeque<Transition>,
+    pub config: Config,
 }
 
 impl Trainer {
-    pub const MODEL_NAME: &'static str = "alpha-zero";
+    pub fn new(config_name: &str) -> Result<Self, Status> {
+        let config = Config::new(config_name);
 
-    pub const REPLAY_MEMORY_SIZE: usize = 600_000;
-    pub const EPISODE_COUNT: usize = 50;
-    pub const EVALUATE_COUNT: usize = 600;
-    pub const EVALUATE_BATCH_SIZE: usize = 16;
-    pub const TRAINING_COUNT: usize = 600;
-    pub const TRAINING_BATCH_SIZE: usize = 128;
-
-    pub const TEST_EVALUATE_COUNT: usize = 1000;
-
-    pub const EPSILON: f32 = 0.25;
-    pub const ALPHA: f32 = 0.03;
-
-    pub const TEMPERATURE: f32 = 1.0;
-    pub const TEMPERATURE_THRESHOLD: usize = 30;
-
-    pub fn new() -> Result<Self, Status> {
         let mut scope = Scope::new_root_scope();
         let agent = AgentModel::new(&mut scope)?;
         let session = Session::new(&SessionOptions::new(), &scope.graph())?;
@@ -60,7 +47,7 @@ impl Trainer {
 
         session.run(&mut init_run_args)?;
 
-        let mut plotter = Plotter::new();
+        let mut plotter = Plotter::new(config.parameters.max_losses);
         if Path::new("plots").join("losses").exists() {
             plotter.load("plots/losses").unwrap();
         }
@@ -69,11 +56,12 @@ impl Trainer {
             session,
             agent_model: agent,
             plotter,
-            replay_memory: VecDeque::with_capacity(Self::REPLAY_MEMORY_SIZE),
+            replay_memory: VecDeque::with_capacity(config.parameters.replay_memory_size),
+            config: config.clone(),
         };
 
         // Load the parameters if it exists.
-        this.load(Self::MODEL_NAME);
+        this.load(config.parameters.model_name);
 
         Ok(this)
     }
@@ -91,22 +79,22 @@ impl Trainer {
             self.replay_memory.clear();
 
             let mut finished_episode_count = 0usize;
-            let mut agents = Vec::with_capacity(Self::EPISODE_COUNT);
-            let mut turn_counts = vec![0; Self::EPISODE_COUNT];
-            let mut transitions = Vec::with_capacity(Self::EPISODE_COUNT);
-            let mut transition_indices = Vec::from_iter(0..Self::EPISODE_COUNT);
+            let mut agents = Vec::with_capacity(self.config.parameters.episode_count);
+            let mut turn_counts = vec![0; self.config.parameters.episode_count];
+            let mut transitions = Vec::with_capacity(self.config.parameters.episode_count);
+            let mut transition_indices = Vec::from_iter(0..self.config.parameters.episode_count);
 
-            for _ in 0..Self::EPISODE_COUNT {
+            for _ in 0..self.config.parameters.episode_count {
                 agents.push(Agent::new(&self.agent_model, &self.session)?);
                 transitions.push(Vec::with_capacity(64));
             }
 
             while !agents.is_empty() {
                 parallel_mcts_executor.execute(
-                    Self::EVALUATE_COUNT,
-                    Self::EVALUATE_BATCH_SIZE,
-                    Self::EPSILON,
-                    Self::ALPHA,
+                    self.config.parameters.evaluate_count,
+                    self.config.parameters.evaluate_batch_size,
+                    self.config.parameters.epsilon,
+                    self.config.parameters.alpha,
                     &self.agent_model,
                     &self.session,
                     &agents,
@@ -120,11 +108,13 @@ impl Trainer {
                     let transitions = &mut transitions[transition_indices[index]];
 
                     let (action, policy) = agent
-                        .sample_action(if *turn_count < Self::TEMPERATURE_THRESHOLD {
-                            ActionSamplingMode::Boltzmann(Self::TEMPERATURE)
-                        } else {
-                            ActionSamplingMode::Best
-                        })
+                        .sample_action(
+                            if *turn_count < self.config.parameters.temperature_threshold {
+                                ActionSamplingMode::Boltzmann(self.config.parameters.temperature)
+                            } else {
+                                ActionSamplingMode::Best
+                            },
+                        )
                         .unwrap();
 
                     *turn_count += 1;
@@ -168,7 +158,7 @@ impl Trainer {
                             "\r[iter={}] Self-playing... [episode={}/{}]",
                             iteration + 1,
                             finished_episode_count,
-                            Self::EPISODE_COUNT
+                            self.config.parameters.episode_count
                         );
                         std::io::stdout().flush().unwrap();
 
@@ -294,18 +284,18 @@ impl Trainer {
                 self.replay_memory.extend(augmented_replay_memory);
             }
 
-            while Self::REPLAY_MEMORY_SIZE < self.replay_memory.len() {
+            while self.config.parameters.replay_memory_size < self.replay_memory.len() {
                 self.replay_memory.pop_front();
             }
 
             println!();
             println!("[iter={}] Entering training phase.", iteration + 1);
 
-            for _ in 0..Self::TRAINING_COUNT {
+            for _ in 0..self.config.parameters.parameter_update_count {
                 let transitions = self
                     .replay_memory
                     .iter()
-                    .choose_multiple(&mut rng, Self::TRAINING_BATCH_SIZE);
+                    .choose_multiple(&mut rng, self.config.parameters.parameter_update_batch_size);
 
                 debug_assert!(!transitions.is_empty());
 
@@ -349,7 +339,7 @@ impl Trainer {
             self.plotter.save("losses").unwrap();
             self.plotter.draw_plot("plots/loss.svg");
 
-            self.save(Self::MODEL_NAME);
+            self.save(self.config.parameters.model_name.clone());
             println!("[iter={}] Model saved.", iteration + 1);
 
             if iteration % 10 == 0 {
@@ -392,10 +382,10 @@ impl Trainer {
 
         while !agents.is_empty() {
             parallel_mcts_executor.execute(
-                Self::TEST_EVALUATE_COUNT,
-                Self::EVALUATE_BATCH_SIZE,
-                Self::EPSILON,
-                Self::ALPHA,
+                self.config.parameters.test_evaluate_count,
+                self.config.parameters.evaluate_batch_size,
+                self.config.parameters.epsilon,
+                self.config.parameters.alpha,
                 &self.agent_model,
                 &self.session,
                 &agents,
