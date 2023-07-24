@@ -90,11 +90,12 @@ impl Trainer {
             let mut finished_episode_count = 0usize;
             let mut agents = Vec::with_capacity(Self::EPISODE_COUNT);
             let mut turn_counts = vec![0; Self::EPISODE_COUNT];
-            let mut transition_list = Vec::with_capacity(Self::EPISODE_COUNT);
+            let mut transitions = Vec::with_capacity(Self::EPISODE_COUNT);
+            let mut transition_indices = Vec::from_iter(0..Self::EPISODE_COUNT);
 
             for _ in 0..Self::EPISODE_COUNT {
                 agents.push(Agent::new(&self.agent_model, &self.session)?);
-                transition_list.push(Vec::with_capacity(64));
+                transitions.push(Vec::with_capacity(64));
             }
 
             while !agents.is_empty() {
@@ -111,7 +112,7 @@ impl Trainer {
                 while index < agents.len() {
                     let agent = &mut agents[index];
                     let turn_count = &mut turn_counts[index];
-                    let transitions = &mut transition_list[index];
+                    let transitions = &mut transitions[transition_indices[index]];
 
                     let (action, policy) = agent
                         .sample_action(if *turn_count < Self::TEMPERATURE_THRESHOLD {
@@ -147,6 +148,7 @@ impl Trainer {
 
                         agents.swap_remove(index);
                         turn_counts.swap_remove(index);
+                        transition_indices.swap_remove(index);
 
                         print!(
                             "\r[iter={}] Self-playing... [episode={}/{}]",
@@ -164,7 +166,7 @@ impl Trainer {
             }
 
             // Update z in the game history, so that the agent can learn from it.
-            for mut transitions in transition_list.into_iter() {
+            for mut transitions in transitions.into_iter() {
                 let mut z = transitions.last().unwrap().z;
 
                 for transition in transitions.iter_mut().rev() {
