@@ -150,11 +150,18 @@ impl MCTSExecutor {
                             }
                         };
 
+                        match terminal_reward {
+                            Some(terminal_reward) => {
+                                // Perform backup from the expanded child node.
+                                expanded_child.propagate(terminal_reward);
+                            }
+                            None => {
                         // Collect the requests.
                         requests.push(NNEvalRequest {
                             node: expanded_child,
-                            terminal_reward,
                         });
+                    }
+                        }
                     }
 
                     if requests.is_empty() {
@@ -178,7 +185,6 @@ impl MCTSExecutor {
 
                         // The value should be negated because the value is from the perspective of the opponent.
                         let value = -value[batch_index];
-                        let reward = request.terminal_reward.unwrap_or(value);
 
                         // Filter out illegal actions and normalize the policy.
                         let mut policy = [0f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
@@ -213,7 +219,7 @@ impl MCTSExecutor {
                         }
 
                         // Perform backup from the expanded child node.
-                        node.propagate(reward);
+                        node.propagate(value);
                     }
 
                     Ok(())
@@ -224,7 +230,6 @@ impl MCTSExecutor {
 
 struct NNEvalRequest {
     pub node: NodePtr<BoardState>,
-    pub terminal_reward: Option<f32>,
 }
 
 fn compute_ucb_1<S>(parent_n: u64, node: &Node<S>, c: f32) -> f32
