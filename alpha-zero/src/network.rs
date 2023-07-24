@@ -36,7 +36,7 @@ impl Network {
     pub const V_FC0_SIZE: i64 = 1;
 
     pub const P_CONV_FILTER_SIZE: i64 = 1;
-    pub const P_CONV_CHANNELS: i64 = 32;
+    pub const P_CONV_CHANNELS: i64 = 2;
     pub const P_CONV_STRIDE: i64 = 1;
 
     pub const P_FLATTEN_SIZE: i64 =
