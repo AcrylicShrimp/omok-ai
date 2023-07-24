@@ -137,7 +137,7 @@ impl Network {
             v_flatten,
             Self::V_FLATTEN_SIZE,
             Self::V_FC0_SIZE,
-            WeightInitializer::He,
+            WeightInitializer::Xavier,
             scope,
         )?;
         let v_fc0_activation = tanh(
@@ -176,7 +176,7 @@ impl Network {
             p_flatten,
             Self::P_FLATTEN_SIZE,
             Self::P_FC0_SIZE,
-            WeightInitializer::He,
+            WeightInitializer::Xavier,
             scope,
         )?;
         let p_fc0_activation = softmax(
