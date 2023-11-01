@@ -67,7 +67,7 @@ pub struct Environment {
 }
 
 impl Environment {
-    pub const BOARD_SIZE: usize = 15;
+    pub const BOARD_SIZE: usize = 9;
     pub const SERIAL_STONE_COUNT: usize = 5;
 
     pub fn new() -> Self {

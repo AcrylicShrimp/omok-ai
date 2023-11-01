@@ -3528,9 +3528,9 @@ dependencies = [
 
 [[package]]
 name = "tensorflow"
-version = "0.20.0"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02ff67d684b1b950bbd81344261e1f0e0a974863015b8baaccc45ee9ec485237"
+checksum = "70a5aa784c60e18bcca7f79fde117bd7209a30247d3242e9127a7d9496e66272"
 dependencies = [
  "byteorder",
  "crc",
@@ -3556,9 +3556,9 @@ dependencies = [
 
 [[package]]
 name = "tensorflow-sys"
-version = "0.23.0"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "552a85dd2dc13b3cafdabfe7363d20e1b8e9c49f5d36703075a47be4adfc98e6"
+checksum = "24fa07ba31c6802a42d8fcb4ed2c400091d1a3da4531c1dea2c162b4b650505c"
 dependencies = [
  "curl",
  "flate2",

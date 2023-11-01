@@ -1,4 +1,4 @@
-use environment::Environment;
+use environment::{Environment, Turn};
 use tensorflow::Tensor;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -16,7 +16,7 @@ pub fn encode_nn_input<'a>(
         input_count as _,
         Environment::BOARD_SIZE as _,
         Environment::BOARD_SIZE as _,
-        2,
+        3,
     ]);
 
     for (index, env) in env_iter.enumerate() {
@@ -25,9 +25,21 @@ pub fn encode_nn_input<'a>(
                 EnvTurnMode::Player => env.turn,
                 EnvTurnMode::Opponent => env.turn.opponent(),
             },
-            &mut input[index * Environment::BOARD_SIZE * Environment::BOARD_SIZE * 2
-                ..(index + 1) * Environment::BOARD_SIZE * Environment::BOARD_SIZE * 2],
+            &mut input[index * Environment::BOARD_SIZE * Environment::BOARD_SIZE * 3
+                ..index * Environment::BOARD_SIZE * Environment::BOARD_SIZE * 3
+                    + Environment::BOARD_SIZE * Environment::BOARD_SIZE * 2],
         );
+
+        // encode the turn as a single layer
+        let value = match env.turn {
+            Turn::Black => 1f32,
+            Turn::White => 0f32,
+        };
+
+        input[index * Environment::BOARD_SIZE * Environment::BOARD_SIZE * 3
+            + Environment::BOARD_SIZE * Environment::BOARD_SIZE * 2
+            ..(index + 1) * Environment::BOARD_SIZE * Environment::BOARD_SIZE * 3]
+            .fill(value);
     }
 
     input

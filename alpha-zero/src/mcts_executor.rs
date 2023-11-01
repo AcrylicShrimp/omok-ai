@@ -19,7 +19,6 @@ pub struct MCTSExecutor {
 
 impl MCTSExecutor {
     pub const C_PUCT: f32 = 1.0;
-    pub const V_LOSS: f32 = 0.1;
 
     pub fn new() -> Self {
         Self {
@@ -97,7 +96,6 @@ impl MCTSExecutor {
                             // If the leaf node is terminal state, we don't need to expand it.
                             // Instead we perform backup from the leaf node.
                             node.propagate(node.state.z.load(Ordering::Relaxed));
-                            node.v_loss.fetch_sub(1, Ordering::Relaxed);
                             continue;
                         }
 
@@ -126,7 +124,6 @@ impl MCTSExecutor {
                         } else {
                             // There's no action for now.
                             // Note that this not means the game is over.
-                            node.v_loss.fetch_sub(1, Ordering::Relaxed);
                             continue;
                         };
 
@@ -172,14 +169,10 @@ impl MCTSExecutor {
                                 z: AtomicF32::new(terminal_reward.unwrap_or(0f32)),
                             },
                         ) {
-                            Some(child) => {
-                                node.v_loss.fetch_sub(1, Ordering::Relaxed);
-                                child
-                            }
+                            Some(child) => child,
                             None => {
                                 // The node is already expanded by other thread.
                                 // We don't need to expand it again.
-                                node.v_loss.fetch_sub(1, Ordering::Relaxed);
                                 continue;
                             }
                         };
@@ -274,5 +267,5 @@ where
     let q_s_a = node.w.load(Ordering::Relaxed) as f32 / (n as f32 + f32::EPSILON);
     let p_s_a = node.p.load(Ordering::Relaxed);
     let bias = f32::sqrt(parent_n as f32) / (1 + n) as f32;
-    q_s_a + c * p_s_a * bias - node.v_loss.load(Ordering::Relaxed) as f32 * MCTSExecutor::V_LOSS
+    q_s_a + c * p_s_a * bias
 }

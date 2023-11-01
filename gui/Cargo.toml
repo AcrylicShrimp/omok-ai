@@ -19,7 +19,7 @@ rayon = { version = "1.7" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tauri = { version = "1.2.4", features = [] }
-tensorflow = "0.20"
+tensorflow = "0.21"
 
 [features]
 # by default Tauri runs in production mode

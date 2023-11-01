@@ -7,7 +7,7 @@ use alpha_zero::{
     encode_nn_input, encode_nn_targets, ActionSamplingMode, Agent, AgentModel, EnvTurnMode,
     ParallelMCTSExecutor,
 };
-use environment::{Environment, GameStatus, Stone};
+use environment::{Environment, GameStatus, Stone, Turn};
 use rand::{seq::IteratorRandom, thread_rng, Rng};
 use std::{
     collections::VecDeque,
@@ -79,31 +79,59 @@ impl Trainer {
             self.replay_memory.clear();
 
             let mut finished_episode_count = 0usize;
-            let mut agents = Vec::with_capacity(self.config.parameters.episode_count);
+            // two separate agents representing black and white.
+            let mut agents_1 = Vec::with_capacity(self.config.parameters.episode_count);
+            let mut agents_2 = Vec::with_capacity(self.config.parameters.episode_count);
             let mut turn_counts = vec![0; self.config.parameters.episode_count];
             let mut transitions = Vec::with_capacity(self.config.parameters.episode_count);
             let mut transition_indices = Vec::from_iter(0..self.config.parameters.episode_count);
 
             for _ in 0..self.config.parameters.episode_count {
-                agents.push(Agent::new(&self.agent_model, &self.session)?);
+                agents_1.push(Agent::new(&self.agent_model, &self.session)?);
+                agents_2.push(Agent::new(&self.agent_model, &self.session)?);
                 transitions.push(Vec::with_capacity(64));
             }
 
-            while !agents.is_empty() {
-                parallel_mcts_executor.execute(
-                    self.config.parameters.evaluate_count,
-                    self.config.parameters.evaluate_batch_size,
-                    self.config.parameters.epsilon,
-                    self.config.parameters.alpha,
-                    &self.agent_model,
-                    &self.session,
-                    &agents,
-                )?;
+            while !agents_1.is_empty() {
+                // it is safe to check any agent's env, because all agents have the same env.
+                let turn = agents_1[0].env.turn;
+
+                match turn {
+                    Turn::Black => {
+                        parallel_mcts_executor.execute(
+                            self.config.parameters.evaluate_count,
+                            self.config.parameters.evaluate_batch_size,
+                            self.config.parameters.epsilon,
+                            self.config.parameters.alpha,
+                            &self.agent_model,
+                            &self.session,
+                            &agents_1,
+                        )?;
+                    }
+                    Turn::White => {
+                        parallel_mcts_executor.execute(
+                            self.config.parameters.evaluate_count,
+                            self.config.parameters.evaluate_batch_size,
+                            self.config.parameters.epsilon,
+                            self.config.parameters.alpha,
+                            &self.agent_model,
+                            &self.session,
+                            &agents_2,
+                        )?;
+                    }
+                }
 
                 let mut index = 0;
 
+                let (agents, opposite_agents) = match turn {
+                    Turn::Black => (&mut agents_1, &mut agents_2),
+                    Turn::White => (&mut agents_2, &mut agents_1),
+                };
+
                 while index < agents.len() {
                     let agent = &mut agents[index];
+                    let opposite_agent = &mut opposite_agents[index];
+
                     let turn_count = &mut turn_counts[index];
                     let transitions = &mut transitions[transition_indices[index]];
 
@@ -132,6 +160,12 @@ impl Trainer {
                         GameStatus::WhiteWin => (1f32, true),
                     };
 
+                    // Ensure that the opposite agent has the same environment.
+                    opposite_agent
+                        .ensure_action_exists(action, &self.agent_model, &self.session)
+                        .unwrap();
+                    opposite_agent.play_action(action).unwrap();
+
                     transitions.push(Transition {
                         env: env_before_action,
                         policy,
@@ -140,17 +174,18 @@ impl Trainer {
 
                     if is_terminal {
                         // We have to put the last transition into the replay memory, in perspective of loser.
-                        transitions.push(Transition {
-                            env: agent.env.clone(),
-                            policy: [1f32
-                                / (Environment::BOARD_SIZE * Environment::BOARD_SIZE) as f32;
-                                Environment::BOARD_SIZE * Environment::BOARD_SIZE],
-                            z: -z,
-                        });
+                        // transitions.push(Transition {
+                        //     env: agent.env.clone(),
+                        //     policy: [1f32
+                        //         / (Environment::BOARD_SIZE * Environment::BOARD_SIZE) as f32;
+                        //         Environment::BOARD_SIZE * Environment::BOARD_SIZE],
+                        //     z: -z,
+                        // });
 
                         finished_episode_count += 1;
 
                         agents.swap_remove(index);
+                        opposite_agents.swap_remove(index);
                         turn_counts.swap_remove(index);
                         transition_indices.swap_remove(index);
 
@@ -343,13 +378,10 @@ impl Trainer {
             println!("[iter={}] Model saved.", iteration + 1);
 
             if iteration % 10 == 0 {
-                println!(
-                    "[iter={}] Playing against random move player.",
-                    iteration + 1
-                );
+                println!("[iter={}] Playing against naive player.", iteration + 1);
 
                 let (black_win, white_win, draw) =
-                    self.play_against_random_player(100, &parallel_mcts_executor)?;
+                    self.play_against_naive_player(100, &parallel_mcts_executor)?;
 
                 println!();
                 println!(
@@ -365,7 +397,7 @@ impl Trainer {
         Ok(())
     }
 
-    fn play_against_random_player(
+    fn _play_against_random_player(
         &self,
         episode_count: usize,
         parallel_mcts_executor: &ParallelMCTSExecutor,
@@ -425,6 +457,124 @@ impl Trainer {
                 agent.ensure_action_exists(random_action, &self.agent_model, &self.session)?;
 
                 let is_terminal = match agent.play_action(random_action).unwrap() {
+                    GameStatus::InProgress => false,
+                    GameStatus::Draw => {
+                        draw += 1;
+                        true
+                    }
+                    GameStatus::BlackWin => {
+                        black_win += 1;
+                        true
+                    }
+                    GameStatus::WhiteWin => {
+                        white_win += 1;
+                        true
+                    }
+                };
+
+                if is_terminal {
+                    agents.swap_remove(index);
+                    continue;
+                }
+
+                index += 1;
+            }
+        }
+
+        Ok((black_win, white_win, draw))
+    }
+
+    fn play_against_naive_player(
+        &self,
+        episode_count: usize,
+        parallel_mcts_executor: &ParallelMCTSExecutor,
+    ) -> Result<(u32, u32, u32), Status> {
+        let mut rng = thread_rng();
+        let mut black_win = 0u32;
+        let mut white_win = 0u32;
+        let mut draw = 0u32;
+        let mut agents = Vec::with_capacity(episode_count);
+
+        for _ in 0..episode_count {
+            agents.push(Agent::new(&self.agent_model, &self.session)?);
+        }
+
+        while !agents.is_empty() {
+            let mut index = 0;
+
+            while index < agents.len() {
+                let agent = &mut agents[index];
+
+                let legal_moves = (0..Environment::BOARD_SIZE * Environment::BOARD_SIZE)
+                    .filter(|&action| agent.env.board[action] == Stone::Empty)
+                    .collect::<Vec<_>>();
+
+                let mut selected_action = None;
+
+                for action in &legal_moves {
+                    let action = *action;
+
+                    // if the given action makes the agent win, play it.
+                    if agent.env.clone().place_stone(action).unwrap().is_terminal() {
+                        selected_action = Some(action);
+                        break;
+                    }
+
+                    // if the given action makes the opponent win, play it.
+                    let mut env = agent.env.clone();
+                    env.turn = env.turn.opponent();
+
+                    if env.place_stone(action).unwrap().is_terminal() {
+                        selected_action = Some(action);
+                        break;
+                    }
+                }
+
+                let action = selected_action
+                    .unwrap_or_else(|| legal_moves[rng.gen_range(0..legal_moves.len())]);
+
+                agent.ensure_action_exists(action, &self.agent_model, &self.session)?;
+
+                let is_terminal = match agent.play_action(action).unwrap() {
+                    GameStatus::InProgress => false,
+                    GameStatus::Draw => {
+                        draw += 1;
+                        true
+                    }
+                    GameStatus::BlackWin => {
+                        black_win += 1;
+                        true
+                    }
+                    GameStatus::WhiteWin => {
+                        white_win += 1;
+                        true
+                    }
+                };
+
+                if is_terminal {
+                    agents.swap_remove(index);
+                    continue;
+                }
+
+                index += 1;
+            }
+
+            parallel_mcts_executor.execute(
+                self.config.parameters.test_evaluate_count,
+                self.config.parameters.evaluate_batch_size,
+                self.config.parameters.epsilon,
+                self.config.parameters.alpha,
+                &self.agent_model,
+                &self.session,
+                &agents,
+            )?;
+
+            let mut index = 0;
+
+            while index < agents.len() {
+                let agent = &mut agents[index];
+                let (best_action, _) = agent.sample_action(ActionSamplingMode::Best).unwrap();
+                let is_terminal = match agent.play_action(best_action).unwrap() {
                     GameStatus::InProgress => false,
                     GameStatus::Draw => {
                         draw += 1;

@@ -9,4 +9,4 @@ edition = "2021"
 alpha-zero = { path = "../alpha-zero" }
 environment = { path = "../environment" }
 mcts = { path = "../mcts" }
-tensorflow = { version = "0.20" }
+tensorflow = { version = "0.21" }

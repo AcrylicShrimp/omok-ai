@@ -3,7 +3,7 @@ use atomic_float::AtomicF32;
 use parking_lot::RwLock;
 use std::{
     ops::Deref,
-    sync::atomic::{AtomicU32, AtomicU64, Ordering},
+    sync::atomic::{AtomicU64, Ordering},
 };
 
 #[derive(Debug)]
@@ -17,7 +17,6 @@ where
     pub p: AtomicF32, // Prior probability of selecting this node.
     pub w: AtomicF32, // Total action value. Note that this is perspective of the parent node.
     pub n: AtomicU64, // Number of times this node has been visited.
-    pub v_loss: AtomicU32,
     pub state: S,
 }
 
@@ -33,7 +32,6 @@ where
             p: AtomicF32::new(p),
             w: AtomicF32::new(0.0),
             n: AtomicU64::new(0),
-            v_loss: AtomicU32::new(0),
             state,
         }
     }
@@ -43,8 +41,6 @@ where
         let mut children = self.children.read();
 
         loop {
-            node.v_loss.fetch_add(1, Ordering::Relaxed);
-
             // If we have not reached the max number of children, return this node, since it is a leaf.
             if children.len() != node.state.available_actions_len() {
                 return node;
@@ -55,8 +51,6 @@ where
             }
 
             let index = selector(node, &children);
-
-            node.v_loss.fetch_sub(1, Ordering::Relaxed);
 
             node = unsafe { &*children[index].ptr };
             let child_children = node.children.read();

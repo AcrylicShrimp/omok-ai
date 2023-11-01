@@ -15,8 +15,8 @@ struct Application {
 }
 
 impl Application {
-    pub const MCTS_COUNT: usize = 600;
-    pub const MCTS_BATCH_SIZE: usize = 16;
+    pub const MCTS_COUNT: usize = 2000;
+    pub const MCTS_BATCH_SIZE: usize = 1;
 
     pub fn new() -> Self {
         let mut agent = Agent::new();

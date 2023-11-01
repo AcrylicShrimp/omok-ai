@@ -15,6 +15,7 @@
           "kind": "lib"
         }
       },
+      "env": { "DYLD_LIBRARY_PATH": "/usr/local/lib" },
       "args": [],
       "cwd": "${workspaceFolder}"
     },
@@ -29,6 +30,7 @@
           "kind": "bin"
         }
       },
+      "env": { "DYLD_LIBRARY_PATH": "/usr/local/lib" },
       "args": [],
       "cwd": "${workspaceFolder}"
     },
@@ -43,6 +45,7 @@
           "kind": "bin"
         }
       },
+      "env": { "DYLD_LIBRARY_PATH": "/usr/local/lib" },
       "args": [],
       "cwd": "${workspaceFolder}"
     },
@@ -57,6 +60,7 @@
           "kind": "lib"
         }
       },
+      "env": { "DYLD_LIBRARY_PATH": "/usr/local/lib" },
       "args": [],
       "cwd": "${workspaceFolder}"
     },
@@ -71,6 +75,7 @@
           "kind": "lib"
         }
       },
+      "env": { "DYLD_LIBRARY_PATH": "/usr/local/lib" },
       "args": [],
       "cwd": "${workspaceFolder}"
     },
@@ -85,6 +90,7 @@
           "kind": "bin"
         }
       },
+      "env": { "DYLD_LIBRARY_PATH": "/usr/local/lib" },
       "args": [],
       "cwd": "${workspaceFolder}"
     },
@@ -99,6 +105,7 @@
           "kind": "bin"
         }
       },
+      "env": { "DYLD_LIBRARY_PATH": "/usr/local/lib" },
       "args": [],
       "cwd": "${workspaceFolder}"
     },
@@ -113,6 +120,7 @@
           "kind": "bin"
         }
       },
+      "env": { "DYLD_LIBRARY_PATH": "/usr/local/lib" },
       "args": [],
       "cwd": "${workspaceFolder}"
     }

@@ -9,7 +9,7 @@ interface ClickResponse {
   game_status: number;
 }
 
-const BOARD_SIZE = 3;
+const BOARD_SIZE = 6;
 
 window.onload = () => {
   const root = document.getElementById("root")!;

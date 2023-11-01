@@ -41,165 +41,168 @@ impl ParallelMCTSExecutor {
                     break;
                 }
 
-                let requests = agents
-                    .par_iter()
-                    .flat_map(|agent| {
-                        let mut rng = thread_rng();
+                let generate_requests = |agent: &Agent| {
+                    let mut rng = thread_rng();
 
-                        // Apply Dirichlet noise to the root node.
-                        if processed_count == 0 {
-                            let noise_dist = Dirichlet::new(
-                                &[alpha; Environment::BOARD_SIZE * Environment::BOARD_SIZE],
-                            )
-                            .unwrap();
-                            let noise = noise_dist.sample(&mut rng);
+                    // Apply Dirichlet noise to the root node.
+                    if processed_count == 0 {
+                        let noise_dist = Dirichlet::new(
+                            &[alpha; Environment::BOARD_SIZE * Environment::BOARD_SIZE],
+                        )
+                        .unwrap();
+                        let noise = noise_dist.sample(&mut rng);
 
-                            // Apply the noise to the root node.
-                            let mut policy = agent.mcts.root().state.policy.write();
+                        // Apply the noise to the root node.
+                        let mut policy = agent.mcts.root().state.policy.write();
 
-                            for (action, policy) in policy.iter_mut().enumerate() {
-                                *policy = (1.0 - epsilon) * *policy + epsilon * noise[action];
+                        for (action, policy) in policy.iter_mut().enumerate() {
+                            *policy = (1.0 - epsilon) * *policy + epsilon * noise[action];
+                        }
+
+                        // Re-normalize the policy.
+                        let sum = policy.iter().sum::<f32>();
+                        let sum_inv = sum.recip();
+
+                        for policy in policy.iter_mut() {
+                            *policy *= sum_inv;
+                        }
+
+                        // Update children's prior probability.
+                        for child in agent.mcts.root().children.read().iter() {
+                            let action = child.action.unwrap();
+                            let prob = policy[action];
+                            child.p.store(prob, Ordering::Relaxed);
+                        }
+                    }
+
+                    let mut requests = Vec::with_capacity(batch_size);
+
+                    for _ in 0..batch_size {
+                        let node = agent.mcts.select_leaf(|parent, children| {
+                            let parent_n = u64::max(1, parent.n.load(Ordering::Relaxed));
+                            children
+                                .iter()
+                                .map(|child| compute_ucb_1(parent_n, child, Self::C_PUCT))
+                                .enumerate()
+                                .max_by(|(_, a), (_, b)| f32::total_cmp(a, b))
+                                .unwrap()
+                                .0
+                        });
+
+                        if node.state.is_terminal() {
+                            // If the leaf node is terminal state, we don't need to expand it.
+                            // Instead we perform backup from the leaf node.
+                            node.propagate(node.state.z.load(Ordering::Relaxed));
+                            continue;
+                        }
+
+                        // Select any possible action.
+                        // Since the leaf node doesn't have terminal state, we need to expand it.
+                        let action = {
+                            let mut bits = BitVec::<usize>::repeat(
+                                false,
+                                Environment::BOARD_SIZE * Environment::BOARD_SIZE,
+                            );
+
+                            for children in node.children.read().iter() {
+                                bits.set(children.action.unwrap(), true);
                             }
 
-                            // Re-normalize the policy.
-                            let sum = policy.iter().sum::<f32>();
+                            let available_actions = (0..Environment::BOARD_SIZE
+                                * Environment::BOARD_SIZE)
+                                .filter(|&action| {
+                                    node.state.is_available_action(action) && !bits[action]
+                                })
+                                .collect::<Vec<_>>();
+                            available_actions.choose(&mut rng).cloned()
+                        };
+                        let action = if let Some(action) = action {
+                            action
+                        } else {
+                            // There's no action for now.
+                            // Note that this not means the game is over.
+                            continue;
+                        };
+
+                        // Place the stone.
+                        let mut env = node.state.env.clone();
+                        let status = env.place_stone(action).unwrap();
+                        let terminal_reward = match status {
+                            GameStatus::InProgress => None,
+                            GameStatus::Draw => Some(0f32),
+                            GameStatus::BlackWin => Some(1f32),
+                            GameStatus::WhiteWin => Some(1f32),
+                        };
+
+                        // Pre-compute policy.
+                        // This will be overwritten by the neural network evaluation.
+                        // Until then, we use the uniform distribution.
+                        let mut policy = [1f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
+
+                        for action in 0..Environment::BOARD_SIZE * Environment::BOARD_SIZE {
+                            if env.board[action] != Stone::Empty {
+                                policy[action] = 0f32;
+                            }
+                        }
+
+                        let sum = policy.iter().sum::<f32>();
+
+                        if f32::EPSILON <= sum {
                             let sum_inv = sum.recip();
 
                             for policy in policy.iter_mut() {
                                 *policy *= sum_inv;
                             }
-
-                            // Update children's prior probability.
-                            for child in agent.mcts.root().children.read().iter() {
-                                let action = child.action.unwrap();
-                                let prob = policy[action];
-                                child.p.store(prob, Ordering::Relaxed);
-                            }
                         }
 
-                        let mut requests = Vec::with_capacity(batch_size);
-
-                        for _ in 0..batch_size {
-                            let node = agent.mcts.select_leaf(|parent, children| {
-                                let parent_n = u64::max(1, parent.n.load(Ordering::Relaxed));
-                                children
-                                    .iter()
-                                    .map(|child| compute_ucb_1(parent_n, child, Self::C_PUCT))
-                                    .enumerate()
-                                    .max_by(|(_, a), (_, b)| f32::total_cmp(a, b))
-                                    .unwrap()
-                                    .0
-                            });
-
-                            if node.state.is_terminal() {
-                                // If the leaf node is terminal state, we don't need to expand it.
-                                // Instead we perform backup from the leaf node.
-                                node.propagate(node.state.z.load(Ordering::Relaxed));
-                                node.v_loss.fetch_sub(1, Ordering::Relaxed);
+                        // Pre-expand the node.
+                        let expanded_child = match agent.mcts.expand(
+                            node,
+                            action,
+                            BoardState {
+                                env,
+                                status,
+                                policy: RwLock::new(policy),
+                                z: AtomicF32::new(terminal_reward.unwrap_or(0f32)),
+                            },
+                        ) {
+                            Some(child) => child,
+                            None => {
+                                // The node is already expanded by other thread.
+                                // We don't need to expand it again.
                                 continue;
                             }
+                        };
 
-                            // Select any possible action.
-                            // Since the leaf node doesn't have terminal state, we need to expand it.
-                            let action = {
-                                let mut bits = BitVec::<usize>::repeat(
-                                    false,
-                                    Environment::BOARD_SIZE * Environment::BOARD_SIZE,
-                                );
-
-                                for children in node.children.read().iter() {
-                                    bits.set(children.action.unwrap(), true);
-                                }
-
-                                let available_actions = (0..Environment::BOARD_SIZE
-                                    * Environment::BOARD_SIZE)
-                                    .filter(|&action| {
-                                        node.state.is_available_action(action) && !bits[action]
-                                    })
-                                    .collect::<Vec<_>>();
-                                available_actions.choose(&mut rng).cloned()
-                            };
-                            let action = if let Some(action) = action {
-                                action
-                            } else {
-                                // There's no action for now.
-                                // Note that this not means the game is over.
-                                node.v_loss.fetch_sub(1, Ordering::Relaxed);
-                                continue;
-                            };
-
-                            // Place the stone.
-                            let mut env = node.state.env.clone();
-                            let status = env.place_stone(action).unwrap();
-                            let terminal_reward = match status {
-                                GameStatus::InProgress => None,
-                                GameStatus::Draw => Some(0f32),
-                                GameStatus::BlackWin => Some(1f32),
-                                GameStatus::WhiteWin => Some(1f32),
-                            };
-
-                            // Pre-compute policy.
-                            // This will be overwritten by the neural network evaluation.
-                            // Until then, we use the uniform distribution.
-                            let mut policy =
-                                [1f32; Environment::BOARD_SIZE * Environment::BOARD_SIZE];
-
-                            for action in 0..Environment::BOARD_SIZE * Environment::BOARD_SIZE {
-                                if env.board[action] != Stone::Empty {
-                                    policy[action] = 0f32;
-                                }
+                        match terminal_reward {
+                            Some(terminal_reward) => {
+                                // Perform backup from the expanded child node.
+                                expanded_child.propagate(terminal_reward);
                             }
-
-                            let sum = policy.iter().sum::<f32>();
-
-                            if f32::EPSILON <= sum {
-                                let sum_inv = sum.recip();
-
-                                for policy in policy.iter_mut() {
-                                    *policy *= sum_inv;
-                                }
-                            }
-
-                            // Pre-expand the node.
-                            let expanded_child = match agent.mcts.expand(
-                                node,
-                                action,
-                                BoardState {
-                                    env,
-                                    status,
-                                    policy: RwLock::new(policy),
-                                    z: AtomicF32::new(terminal_reward.unwrap_or(0f32)),
-                                },
-                            ) {
-                                Some(child) => {
-                                    node.v_loss.fetch_sub(1, Ordering::Relaxed);
-                                    child
-                                }
-                                None => {
-                                    // The node is already expanded by other thread.
-                                    // We don't need to expand it again.
-                                    node.v_loss.fetch_sub(1, Ordering::Relaxed);
-                                    continue;
-                                }
-                            };
-
-                            match terminal_reward {
-                                Some(terminal_reward) => {
-                                    // Perform backup from the expanded child node.
-                                    expanded_child.propagate(terminal_reward);
-                                }
-                                None => {
-                                    // Collect the requests.
-                                    requests.push(NNEvalRequest {
-                                        node: expanded_child,
-                                    });
-                                }
+                            None => {
+                                // Collect the requests.
+                                requests.push(NNEvalRequest {
+                                    node: expanded_child,
+                                });
                             }
                         }
+                    }
 
-                        requests
-                    })
-                    .collect::<Vec<_>>();
+                    requests
+                };
+
+                let requests = if processed_count == 0 {
+                    // warm-up; do not use parallel
+                    agents
+                        .iter()
+                        .flat_map(generate_requests)
+                        .collect::<Vec<_>>()
+                } else {
+                    agents
+                        .par_iter()
+                        .flat_map(generate_requests)
+                        .collect::<Vec<_>>()
+                };
 
                 processed_count += batch_size;
 
